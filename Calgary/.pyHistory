@@ -1,0 +1,5 @@
+﻿import arcpy
+arcpy.env.workspace = "C:\Users\kchan\OneDrive\Desktop\Spring21\CPLN675_LandUseEnvModeling\Midterm\LU_midterm\CPLN675_midterm\midTermProject_Data\midTermProject_Data\Calgary_new"
+arcpy.env.workspace = "C:/Users/kchan/OneDrive/Desktop/Spring21/CPLN675_LandUseEnvModeling/Midterm/LU_midterm/CPLN675_midterm/midTermProject_Data/midTermProject_Data/Calgary_new"
+arcpy.conversion.TableToExcel('ZonalSt_calgary2',"cal_inun_max.xls")
+arcpy.conversion.TableToExcel('cal_elevation_mean',"cal_elev_mean.xls")

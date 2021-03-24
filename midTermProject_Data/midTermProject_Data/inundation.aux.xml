@@ -7,7 +7,7 @@
     <MDI key="PyramidResamplingType">NEAREST</MDI>
   </Metadata>
   <PAMRasterBand band="1">
-    <NoDataValue>2.55000000000000E+002</NoDataValue>
+    <NoDataValue>2.55000000000000E+02</NoDataValue>
     <ColorInterp>Palette</ColorInterp>
     <ColorTable>
       <Entry c1="0" c2="0" c3="0" c4="255" />
@@ -267,6 +267,9 @@
       <Entry c1="254" c2="254" c3="254" c4="255" />
       <Entry c1="255" c2="255" c3="255" c4="255" />
     </ColorTable>
+    <Metadata domain="IMAGE_STRUCTURE">
+      <MDI key="NBITS">4</MDI>
+    </Metadata>
     <Metadata>
       <MDI key="RepresentationType">THEMATIC</MDI>
     </Metadata>
