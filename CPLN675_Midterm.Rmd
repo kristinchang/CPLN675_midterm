@@ -69,6 +69,10 @@ calgary_inundation$ID_fishnet <-as.character(calgary_inundation$ID_fishnet)
 calgary_inundation_grid <- left_join(calgary_inundation, calgary_fishnet) %>% st_as_sf()
 calgary_fishnet_new <-  calgary_inundation_grid
 
+## something happened with inundation reclassification, will need to redo it in arcgis pro. for now, I'll reclassify here
+calgary_fishnet_new <- calgary_fishnet_new %>%
+  mutate(inundation_reclass=ifelse(str_detect(calgary_fishnet_new$inundation, "2"), "yes", "no"))
+
 ```
 
 
@@ -180,12 +184,6 @@ calgary_fishnet_new <- calgary_fishnet_new %>%
 
 
 ```
-## something happened with inundation reclassification, will need to redo it in arcgis pro. for now, I'll reclassify here
-
-```{r}
-calgary_fishnet_new <- calgary_fishnet_new %>%
-  mutate(inundation_reclass=ifelse(str_detect(calgary_fishnet_new$inundation, "2"), "yes", "no"))
-```
 
 ###
 
@@ -217,4 +215,51 @@ ggplot() +
   mapTheme()
 
 ```
+```{r}
+calgary_fishnet_final <- calgary_fishnet_final %>%
+  dplyr::select(-Shape_Leng, -Shape_Area, -inundation)
+
+
+calgary_fishnet_final$slope_mean <-as.numeric(as.character(calgary_fishnet_final$slope_mean))
+calgary_fishnet_final$flowacc_mean <-as.numeric(as.character(calgary_fishnet_final$flowacc_mean))
+calgary_fishnet_final$elevation_mean <-as.numeric(as.character(calgary_fishnet_final$elevation_mean))
+calgary_fishnet_final$impervious_area <-as.numeric(as.character(calgary_fishnet_final$impervious_area))
+calgary_fishnet_final$NEAR_DIST <-as.numeric(as.character(calgary_fishnet_final$NEAR_DIST))
+```
+
+```{r}
+inundationPlotVariables <- 
+  calgary_fishnet_final %>% st_drop_geometry()
+```
+
+
+```{r}
+calgary_fishnet_variables <- inundationPlotVariables %>%
+  dplyr::select(inundation_reclass, elevation_mean, slope_mean, flowacc_mean, NEAR_DIST) %>%
+  gather(key, value, elevation_mean:NEAR_DIST)
+
+
+ggplot(calgary_fishnet_variables, aes(as.factor(inundation_reclass), value, fill=as.factor(inundation_reclass))) + 
+    geom_bar(stat = "identity") +
+    facet_wrap(~key) +
+  scale_fill_manual(values = c("dodgerblue4", "darkgreen"),
+                    labels = c("Not Inundated","Inundated"),
+                    name = "")   + labs(x="Inundation", y="Value")
+```
+
+```{r}
+#imperv surface was warping the scaling, so visualizing separately
+calgary_fishnet_variable_imperv <- inundationPlotVariables %>%
+  dplyr::select(inundation_reclass, impervious_area) %>%
+  gather(key, value, impervious_area)
+
+
+ggplot(calgary_fishnet_variable_imperv, aes(as.factor(inundation_reclass), value, fill=as.factor(inundation_reclass))) + 
+    geom_bar(stat = "identity") +
+    facet_wrap(~key) +
+  scale_fill_manual(values = c("dodgerblue4", "darkgreen"),
+                    labels = c("Not Inundated","Inundated"),
+                    name = "")   + labs(x="Inundation", y="Value")
+```
+
 
