@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata xml:lang="en"><Esri><CreaDate>20210324</CreaDate><CreaTime>21311800</CreaTime><ArcGISFormat>1.0</ArcGISFormat><SyncOnce>TRUE</SyncOnce><DataProperties><lineage><Process ToolSource="c:\program files\arcgis\pro\Resources\ArcToolbox\toolboxes\Spatial Analyst Tools.tbx\SetNull" Date="20210324" Time="213118">SetNull cal_flowacc 1 C:\Users\jenna\Documents\GitHub\CPLN675_midterm\midterm_ArcGIS\cal_stream ""VALUE" &lt; 73047"</Process></lineage></DataProperties></Esri></metadata>
