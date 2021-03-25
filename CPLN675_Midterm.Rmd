@@ -144,7 +144,7 @@ calgary_fishnet_new <- calgary_slope_grid
 ```
 
 ```{r, calculate impervious surface area for calgary per cell}
-# CALGARY: Impervious surface area (calculate per fishnet cell in R and prep to join to fishnet later). FYI THIS IS A MASSIVE FILE AND GITHUB IS YELLING AT ME AND CAN'T LOAD IT, U WILL NEED TO HAVE IT LOCALLY
+# CALGARY: Impervious surface area (calculate per fishnet cell in R and prep to join to fishnet later). FYI THIS IS A MASSIVE FILE AND GITHUB IS YELLING AT ME AND CAN'T LOAD IT, SO I ZIPPED IT UP AND YOU'LL NEED TO SAVE IT LOCALLY
 calgary_landCover <- st_read("Data_Calgary/LandCover/geo_export_b68ee7b7-76c0-4bf4-96d2-02b12a13fe5f.shp")
 
 # Reclassify land classes, impervious vs impervious. Just keep impervious.
