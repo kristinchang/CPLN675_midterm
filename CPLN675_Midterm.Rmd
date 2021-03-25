@@ -41,6 +41,9 @@ mapTheme <- function(base_size = 12) {
 # CALGARY: Load Calgary fishnet generated in ArcGIS Pro (200x200m cells).
 calgary_fishnet <- st_read("Data_Calgary/Calgary_new/for_R/calgary_fishnet.shp") %>%
 st_as_sf() %>% st_transform('EPSG:3780')
+
+calgary_fishnet$ID_fishnet <-as.character(calgary_fishnet$ID_fishnet)
+
 ```
 
 
@@ -59,6 +62,13 @@ calgary_inundation <- st_read("Data_Calgary/Calgary_new/for_R/cal_inun_max.xls")
   dplyr::select(OID, MAX) %>%
   dplyr::rename(ID_fishnet = OID) %>%
   dplyr::rename(inundation = MAX)
+
+
+calgary_inundation$ID_fishnet <-as.character(calgary_inundation$ID_fishnet)
+
+calgary_inundation_grid <- left_join(calgary_inundation, calgary_fishnet) %>% st_as_sf()
+calgary_fishnet_new <-  calgary_inundation_grid
+
 ```
 
 
@@ -68,6 +78,12 @@ calgary_elev <- st_read("Data_Calgary/Calgary_new/for_R/cal_elev_mean.xls") %>%
   dplyr::select(OID, MEAN) %>%
   dplyr::rename(ID_fishnet = OID) %>%
   dplyr::rename(elevation_mean = MEAN)
+
+calgary_elev$ID_fishnet <-as.character(calgary_elev$ID_fishnet)
+
+calgary_elev_grid <- full_join(calgary_elev, calgary_fishnet_new) %>% st_as_sf()
+calgary_fishnet_new <- calgary_elev_grid
+
 
 ```
 
@@ -92,6 +108,11 @@ calgary_streams_neardist <- st_read("HydroData_Calgary_ArcGIS/Data/cal_stream_ne
 
 ##FYI was having trouble calculating distance to line using dist2Line in geosphere package in R, so decided to use the generate near table in ArcGIS to calculate from fishnet to stream. I have no idea if it used the centroid, though.
 
+calgary_streams_neardist$ID_fishnet <-as.character(calgary_streams_neardist$ID_fishnet)
+
+calgary_streamneardist_grid <- full_join(calgary_streams_neardist, calgary_fishnet_new) %>% st_as_sf()
+calgary_fishnet_new <-  calgary_streamneardist_grid
+
 ```
 
 ```{r, prep flow accumulation for calgary}
@@ -100,6 +121,11 @@ calgary_flowacc <- st_read("HydroData_Calgary_ArcGIS/Data/cal_flowacc_mean.xls")
   dplyr::rename(ID_fishnet = ID_FISHNET) %>%
   dplyr::rename(flowacc_mean = MEAN) %>%
   dplyr::select(-Rowid, -COUNT, -AREA, -ZONE.CODE)
+
+calgary_flowacc$ID_fishnet <-as.character(calgary_flowacc$ID_fishnet)
+
+calgary_flowacc_grid <- full_join(calgary_flowacc, calgary_fishnet_new) %>%st_as_sf()
+calgary_fishnet_new <- calgary_flowacc_grid 
 
 ```
 
@@ -110,10 +136,15 @@ calgary_slope <- st_read("HydroData_Calgary_ArcGIS/Data/cal_slope_mean.xls") %>%
   dplyr::rename(slope_mean = MEAN) %>%
   dplyr::select(-Rowid, -COUNT, -AREA, -ZONE.CODE)
 
+calgary_slope$ID_fishnet <-as.character(calgary_slope$ID_fishnet)
+
+calgary_slope_grid <- full_join(calgary_slope, calgary_fishnet_new) %>% st_as_sf()
+calgary_fishnet_new <- calgary_slope_grid
+
 ```
 
 ```{r, calculate impervious surface area for calgary per cell}
-# CALGARY: Impervious surface area (calculate per fishnet cell in R and prep to join to fishnet later).
+# CALGARY: Impervious surface area (calculate per fishnet cell in R and prep to join to fishnet later). FYI THIS IS A MASSIVE FILE AND GITHUB IS YELLING AT ME AND CAN'T LOAD IT, U WILL NEED TO HAVE IT LOCALLY
 calgary_landCover <- st_read("Data_Calgary/LandCover/geo_export_b68ee7b7-76c0-4bf4-96d2-02b12a13fe5f.shp")
 
 # Reclassify land classes, impervious vs impervious. Just keep impervious.
@@ -126,11 +157,64 @@ calgary_landCover <- calgary_landCover %>%
 # Reproject
 calgary_landCover <- calgary_landCover %>% 
   select(lc_cat, impervious) %>% 
-  st_transform(crs = st_crs(calgary_fishnet))
+  st_transform(crs = st_crs(calgary_fishnet_new))
 
 # st_area
 calgary_landCover <- calgary_landCover %>% 
   mutate(impervious_area = st_area(calgary_landCover))
 ```
 
-## This is probably where we should do the spatial join so we can visualize the features before builidng the model
+
+
+```{r}
+imperv_grid <- st_join(calgary_fishnet_new, calgary_landCover)
+
+
+imperv_grid <- imperv_grid %>% 
+  data.frame(.) %>% 
+  group_by(ID_fishnet) %>% 
+  summarise(impervious_area = sum(impervious_area, na.rm = TRUE))
+
+calgary_fishnet_new <- calgary_fishnet_new %>% 
+  inner_join(imperv_grid)
+
+
+```
+## something happened with inundation reclassification, will need to redo it in arcgis pro. for now, I'll reclassify here
+
+```{r}
+calgary_fishnet_new <- calgary_fishnet_new %>%
+  mutate(inundation_reclass=ifelse(str_detect(calgary_fishnet_new$inundation, "2"), "yes", "no"))
+```
+
+###
+
+
+```{r}
+calgary_boundary <- calgary_boundary %>% st_transform('EPSG:3780')
+
+```
+
+```{r}
+# Centroid-in-polygon join to see which cells have their centroid in the buffer
+selectCentroids <-
+  st_centroid(calgary_fishnet_new)[calgary_boundary,] %>%
+  st_drop_geometry() %>%
+  left_join(dplyr::select(calgary_fishnet_new, ID_fishnet)) %>%
+  st_sf()
+
+calgary_fishnet_final <- selectCentroids 
+```
+
+```{r}
+ggplot() + 
+  geom_sf(data=calgary_fishnet_final, aes(fill=as.factor(inundation_reclass))) +
+  scale_fill_manual(values = c("navy", "darkgreen"),
+                    labels = c("yes","no"),
+                    name = "") +
+  labs(title="Inundation in Calgary, by way of the fishnet") +
+  geom_sf(data=calgary_boundary, color="black", fill=NA)+
+  mapTheme()
+
+```
+
