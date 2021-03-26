@@ -32,8 +32,7 @@ mapTheme <- function(base_size = 12) {
     axis.title.y = element_blank(),
     panel.grid.minor = element_blank(),
     panel.border = element_rect(colour = "black", fill=NA, size=2)
-  )
-}
+  )}
 
 ```
 
@@ -49,7 +48,10 @@ calgary_fishnet$ID_fishnet <-as.character(calgary_fishnet$ID_fishnet)
 
 ```{r, load boundary for calgary}
 calgary_boundary <- st_read("provided_midTermProject_Data/CALGIS_CITYBOUND_LIMIT/CALGIS_CITYBOUND_LIMIT.shp")
+```
 
+
+```{r, load boundary for calgary}
 ggplot() +
   geom_sf(data=calgary_boundary, fill="grey") +
   geom_sf(data=calgary_fishnet, alpha=0.2) + mapTheme()
@@ -71,7 +73,10 @@ calgary_fishnet_new <-  calgary_inundation_grid
 
 ## something happened with inundation reclassification, will need to redo it in arcgis pro. for now, I'll reclassify here
 calgary_fishnet_new <- calgary_fishnet_new %>%
-  mutate(inundation_reclass=ifelse(str_detect(calgary_fishnet_new$inundation, "2"), "yes", "no"))
+  mutate(inundation_reclass=ifelse(str_detect(calgary_fishnet_new$inundation, "2"), "1", "0"))
+
+calgary_fishnet_new <- calgary_fishnet_new %>%
+  dplyr::select(-inundation)
 
 ```
 
@@ -167,10 +172,10 @@ calgary_landCover <- calgary_landCover %>%
 calgary_landCover <- calgary_landCover %>% 
   mutate(impervious_area = st_area(calgary_landCover))
 ```
-
-
-
 ```{r}
+
+# fyi once you load this one, it takes FOREVER. Wondering if we should do zonal geom in arcgis instead...
+
 imperv_grid <- st_join(calgary_fishnet_new, calgary_landCover)
 
 
@@ -185,8 +190,7 @@ calgary_fishnet_new <- calgary_fishnet_new %>%
 
 ```
 
-###
-
+## Modeling
 
 ```{r}
 calgary_boundary <- calgary_boundary %>% st_transform('EPSG:3780')
@@ -195,13 +199,13 @@ calgary_boundary <- calgary_boundary %>% st_transform('EPSG:3780')
 
 ```{r}
 # Centroid-in-polygon join to see which cells have their centroid in the buffer
-selectCentroids <-
+calgary_selectCentroids <-
   st_centroid(calgary_fishnet_new)[calgary_boundary,] %>%
   st_drop_geometry() %>%
   left_join(dplyr::select(calgary_fishnet_new, ID_fishnet)) %>%
   st_sf()
 
-calgary_fishnet_final <- selectCentroids 
+calgary_fishnet_final <- calgary_selectCentroids 
 ```
 
 ```{r}
@@ -215,16 +219,27 @@ ggplot() +
   mapTheme()
 
 ```
+
 ```{r}
 calgary_fishnet_final <- calgary_fishnet_final %>%
-  dplyr::select(-Shape_Leng, -Shape_Area, -inundation)
+  dplyr::select(-Shape_Leng, -Shape_Area)
 
-
+calgary_fishnet_final$inundation_reclass <-as.numeric(as.character(calgary_fishnet_final$inundation_reclass))
 calgary_fishnet_final$slope_mean <-as.numeric(as.character(calgary_fishnet_final$slope_mean))
 calgary_fishnet_final$flowacc_mean <-as.numeric(as.character(calgary_fishnet_final$flowacc_mean))
 calgary_fishnet_final$elevation_mean <-as.numeric(as.character(calgary_fishnet_final$elevation_mean))
 calgary_fishnet_final$impervious_area <-as.numeric(as.character(calgary_fishnet_final$impervious_area))
 calgary_fishnet_final$NEAR_DIST <-as.numeric(as.character(calgary_fishnet_final$NEAR_DIST))
+```
+
+
+```{r}
+
+#writing what I have so far to a .csv also in github, so you can also just load this back in and do a join to the fishnet shapefile (using ID_fishnet as the joiner)
+
+
+#st_write(calgary_fishnet_final, "calgary_fishnet_final.csv")
+
 ```
 
 ```{r}
@@ -262,4 +277,27 @@ ggplot(calgary_fishnet_variable_imperv, aes(as.factor(inundation_reclass), value
                     name = "")   + labs(x="Inundation", y="Value")
 ```
 
+
+```{r}
+set.seed(3456)
+trainIndex <- createDataPartition(calgary_fishnet_final$inundation_reclass, p = .70,
+                                  list = FALSE,
+                                  times = 1)
+calgaryTrain <- calgary_fishnet_final[ trainIndex,]
+calgaryTest  <- calgary_fishnet_final[-trainIndex,]
+```
+
+```{r}
+calgaryModel <- glm(inundation_reclass ~ .,
+                  data=st_drop_geometry(calgaryTrain) %>% dplyr::select(-ID_fishnet), family="binomial")
+```
+
+```{r}
+summary(calgaryModel)
+```
+```{r}
+library(jtools)
+summ(calgaryModel)
+
+```
 
