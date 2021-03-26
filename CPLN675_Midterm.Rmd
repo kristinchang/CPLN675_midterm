@@ -220,7 +220,7 @@ calgary_fishnet_final$steepslope_dist <-as.numeric(as.character(calgary_fishnet_
 #writing what I have so far to a .csv also in github, so you can also just load this back in and do a join to the fishnet shapefile (using ID_fishnet as the joiner)
 
 
-#st_write(calgary_fishnet_final, "calgary_fishnet_final.csv")
+#st_write(calgary_fishnet_final, "calgary_fishnet_final_new.csv")
 
 ```
 
