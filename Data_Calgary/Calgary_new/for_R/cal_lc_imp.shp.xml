@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata xml:lang="en"><Esri><CreaDate>20210326</CreaDate><CreaTime>12085100</CreaTime><ArcGISFormat>1.0</ArcGISFormat><SyncOnce>TRUE</SyncOnce><DataProperties><lineage><Process ToolSource="c:\program files\arcgis\pro\Resources\ArcToolbox\toolboxes\Conversion Tools.tbx\RasterToPolygon" Date="20210326" Time="120851">RasterToPolygon cal_lc_imp C:\Users\jenna\Documents\GitHub\CPLN675_midterm\Data_Calgary\Calgary_new\for_R\cal_lc_imp.shp NO_SIMPLIFY VALUE SINGLE_OUTER_PART #</Process></lineage></DataProperties></Esri></metadata>

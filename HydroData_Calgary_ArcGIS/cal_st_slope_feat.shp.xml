@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata xml:lang="en"><Esri><CreaDate>20210326</CreaDate><CreaTime>14080800</CreaTime><ArcGISFormat>1.0</ArcGISFormat><SyncOnce>TRUE</SyncOnce><DataProperties><lineage><Process ToolSource="c:\program files\arcgis\pro\Resources\ArcToolbox\toolboxes\Conversion Tools.tbx\RasterToPolygon" Date="20210326" Time="140808">RasterToPolygon cal_st_slope C:\Users\jenna\Documents\GitHub\CPLN675_midterm\HydroData_Calgary_ArcGIS\cal_st_slope_feat.shp SIMPLIFY VALUE SINGLE_OUTER_PART #</Process></lineage></DataProperties></Esri></metadata>
