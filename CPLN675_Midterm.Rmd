@@ -588,3 +588,16 @@ ggplot() +
   mapTheme() +
   labs(title="")
 ```
+
+```{r create_denver_fishnet}
+den_bound <- st_read("Data_Denver/county_boundary/county_boundary.shp")
+
+den_fishnet <-
+  st_make_grid(den_bound, cellsize = .003) %>%
+  st_sf() %>%
+  mutate(uniqueID = rownames(.))
+
+ggplot() +
+  geom_sf(data=den_bound, fill="grey") +
+  geom_sf(data=den_fishnet, alpha=0.2) + mapTheme()
+```
