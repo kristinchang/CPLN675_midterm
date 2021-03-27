@@ -153,13 +153,41 @@ calgary_fishnet_new <- calgary_flowacc_grid
 ```
 
 
-```{r, map streams for calgary}
+```{r, map streams for calgary just to see what's up}
 #visualize streams
 ggplot() +
   geom_sf(data=calgary_boundary, fill="grey") +
   #geom_sf(data=calgary_fishnet, alpha=0.2) + 
   geom_sf(data=calgary_streams, color="blue") +mapTheme()
+```
 
+```{r, parks distance load from arcgis}
+# CALGARY: Parks distance - from open data calgary. Used arcgis pro to create a near distance table.
+
+calgary_parks_neardist <- st_read("Data_Calgary/Calgary_new/for_R/cal_parksfeat_near.xls")  %>%
+  dplyr::select(-Rowid, -OBJECTID, -NEAR_FID) %>%
+  dplyr::rename(ID_FISHNET = IN_FID) %>%
+  dplyr::rename(dist_parks = NEAR_DIST)
+
+calgary_parks_neardist$ID_FISHNET <-as.character(calgary_parks_neardist$ID_FISHNET)
+
+calgary_parks_neardist_grid <- full_join(calgary_parks_neardist, calgary_fishnet_new) %>% st_as_sf()
+calgary_fishnet_new <-  calgary_parks_neardist_grid
+```
+```{r, import shapefile of hydrology features}
+#shapefile import
+calgary_hydro <- st_read("Data_Calgary/Calgary_new/for_R/Hydrology/hydrology_features.shp") %>%
+  st_transform(st_crs(calgary_fishnet_new))
+
+#visualize hydrology features - more extensive than what the stream network from ArcGIS provided
+ggplot() +
+  geom_sf(data=calgary_boundary, fill="grey") +
+  #geom_sf(data=calgary_fishnet, alpha=0.2) + 
+  geom_sf(data=calgary_hydro, color="blue") +mapTheme()
+
+```
+```{r, number of hydrology feature intersections per fishnet cell}
+calgary_fishnet_new <- calgary_fishnet_new %>% mutate(n_hydro_int = lengths(st_intersects(calgary_fishnet_new, calgary_hydro)))
 ```
 
 
@@ -184,6 +212,7 @@ calgary_steepslope_dist$ID_FISHNET <-as.character(calgary_steepslope_dist$ID_FIS
 
 calgary_steepslope_dist_grid <- full_join(calgary_steepslope_dist, calgary_fishnet_new) %>%st_as_sf()
 calgary_fishnet_new <- calgary_steepslope_dist_grid 
+
 ```
 
 ```{r, impervious land cover sum  for calgary}
@@ -202,6 +231,8 @@ calgary_impervious_sum_grid[is.na(calgary_impervious_sum_grid)] = 0
 calgary_fishnet_new <- calgary_impervious_sum_grid
 
 ```
+
+
 Talk about trimming the fishnet down by doing a select-by-centroids approach.
 ```{r, select fishnet cells by centroid}
 # Centroid-in-polygon join to see which cells have their centroid in the calgary boundary
@@ -238,6 +269,8 @@ calgary_fishnet_final$flowacc_max <-as.numeric(as.character(calgary_fishnet_fina
 calgary_fishnet_final$elevation_mean <-as.numeric(as.character(calgary_fishnet_final$elevation_mean))
 calgary_fishnet_final$imperv_pixels_sum <-as.numeric(as.character(calgary_fishnet_final$imperv_pixels_sum))
 calgary_fishnet_final$dist_stream <-as.numeric(as.character(calgary_fishnet_final$dist_stream))
+calgary_fishnet_final$n_hydro_int <-as.numeric(as.character(calgary_fishnet_final$n_hydro_int))
+calgary_fishnet_final$dist_parks <-as.numeric(as.character(calgary_fishnet_final$dist_parks))
 calgary_fishnet_final$steepslope_dist <-as.numeric(as.character(calgary_fishnet_final$steepslope_dist))
 ```
 
@@ -248,6 +281,13 @@ ggplot() +
   geom_sf(data = calgary_fishnet_final, aes(fill = dist_stream), color=NA) +
   scale_fill_viridis()+
   labs(title = "Distance to Streams", fill="Distance \n(meters)") + mapTheme()
+```
+```{r}
+#number of hydrology feature intersections
+ggplot() +
+  geom_sf(data = calgary_fishnet_final, aes(fill = n_hydro_int), color=NA) +
+  scale_fill_viridis()+
+  labs(title = "Hydrology Intersections", fill="Number") + mapTheme()
 ```
 
 ```{r}
@@ -270,11 +310,6 @@ ggplot() +
 ```
 
 
-```{r}
-# bring in large basin polygon and see if  cells intersect w it
-
-
-```
 
 ```{r}
 
@@ -294,7 +329,7 @@ inundationPlotVariables <-
 ```{r}
 # plotting independent variables for elevation_mean and slope_max
 calgary_fishnet_variables <- inundationPlotVariables %>%
-  dplyr::select(inundation, elevation_mean, steepslope_dist, dist_stream, slope_max) %>%
+  dplyr::select(inundation, elevation_mean, steepslope_dist, dist_stream, dist_parks, slope_max) %>%
   gather(key, value, elevation_mean:slope_max)%>%
    mutate(value = ifelse(key == "slope_max", value*100, value))
 
@@ -312,7 +347,7 @@ ggplot(calgary_fishnet_variables, aes(as.factor(inundation), value, fill=as.fact
 
 #plotting these again, but this time using stat="summary" and mean for the function. also, scaling slope to see if there is a discernable difference. 
 calgary_fishnet_variables <- inundationPlotVariables %>%
-  dplyr::select(inundation, elevation_mean, steepslope_dist, dist_stream, slope_max) %>%
+  dplyr::select(inundation, elevation_mean, steepslope_dist, dist_stream, dist_parks, slope_max) %>%
   gather(key, value, elevation_mean:slope_max) %>%
    mutate(value = ifelse(key == "slope_max", value*100, value))
 
@@ -323,12 +358,12 @@ ggplot(calgary_fishnet_variables, aes(as.factor(inundation), value, fill=as.fact
     scale_y_continuous(labels = comma) +
   scale_fill_manual(values = c("dodgerblue4", "darkgreen"),
                     labels = c("Not Inundated","Inundated"),
-                    name = "")   + labs(x="Inundation", y="Mean")
+                    name = "")   + labs(x="Inundation", y="Mean") +plotTheme()
 ```
 
 
 ```{r}
-#imperv surface was warping the scaling, so visualizing separately
+# flow accumulation max, visualizing separately
 calgary_fishnet_variable_imperv <- inundationPlotVariables %>%
   dplyr::select(inundation, flowacc_max) %>%
   gather(key, value, flowacc_max)
@@ -340,7 +375,7 @@ ggplot(calgary_fishnet_variable_imperv, aes(as.factor(inundation), value, fill=a
       scale_y_continuous(labels = comma) +
   scale_fill_manual(values = c("dodgerblue4", "darkgreen"),
                     labels = c("Not Inundated","Inundated"),
-                    name = "")   + labs(x="Inundation", y="Value")
+                    name = "")   + labs(x="Inundation", y="Value") +plotTheme()
 ```
 
 ```{r}
@@ -356,7 +391,22 @@ ggplot(calgary_fishnet_variable_imperv, aes(as.factor(inundation), value, fill=a
       scale_y_continuous(labels = comma) +
   scale_fill_manual(values = c("dodgerblue4", "darkgreen"),
                     labels = c("Not Inundated","Inundated"),
-                    name = "")   + labs(x="Inundation", y="Value")
+                    name = "")   + labs(x="Inundation", y="Value") +plotTheme()
+```
+```{r}
+# number of hydro intersections, visualizing separately
+calgary_fishnet_variable_nhydroint <- inundationPlotVariables %>%
+  dplyr::select(inundation, n_hydro_int) %>%
+  gather(key, value, n_hydro_int)
+
+
+ggplot(calgary_fishnet_variable_nhydroint, aes(as.factor(inundation), value, fill=as.factor(inundation))) + 
+    geom_bar(stat = "identity")+
+    facet_wrap(~key) +
+      scale_y_continuous(labels = comma) +
+  scale_fill_manual(values = c("dodgerblue4", "darkgreen"),
+                    labels = c("Not Inundated","Inundated"),
+                    name = "")   + labs(x="Inundation", y="Value") +plotTheme()
 ```
 
 
@@ -371,7 +421,7 @@ calgaryTest  <- calgary_fishnet_final[-trainIndex,]
 
 ```{r}
 calgaryModel <- glm(inundation ~ ., family="binomial"(link="logit"),
-                  data=(calgaryTrain) %>% as.data.frame() %>% dplyr::select(-ID_FISHNET, -geometry))
+                  data=(calgaryTrain) %>% as.data.frame() %>% dplyr::select(-ID_FISHNET, -geometry, -slope_max, -imperv_pixels_sum))
 
 
 ```
@@ -398,12 +448,13 @@ testProbs <- data.frame(obs = as.numeric(calgaryTest$inundation),
 ggplot(testProbs, aes(x = pred, fill=as.factor(obs))) + geom_density() +
   facet_grid(obs ~ .) + xlab("Probability") + geom_vline(xintercept = .5) +
   scale_fill_manual(values = c("dodgerblue4", "darkgreen"),
-                      labels = c("Not Inundated","Inundated"),
-                      name = "")
+                      labels = c("Not Inundated","Inundated")) +
+                      labs(title = "Distribution of Probabilities") + plotTheme()
 ```
 
 ```{r}
-testProbs$predClass  = ifelse(testProbs$pred > .5 ,1,0)
+#changed the threshold to 0.4
+testProbs$predClass  = ifelse(testProbs$pred > .4 ,1,0)
 
 xtab.regCalgary <- caret::confusionMatrix(reference = as.factor(testProbs$obs), 
                        data = as.factor(testProbs$predClass), 
@@ -445,22 +496,18 @@ ctrl <- trainControl(method = "cv",
 
 cvFit_calgaryReg <- train(as.factor(inundation) ~ ., data = calgary_fishnet_final %>% 
                             as.data.frame() %>%
-                            select(-ID_FISHNET, -geometry),
+                            select(-ID_FISHNET, -geometry, -slope_max, -imperv_pixels_sum),
                           method="glm", family="binomial", trControl=ctrl)
-
-#cvFit_calgaryReg <- train(inundation ~ .,  data=st_drop_geometry(calgary_fishnet_final) %>% dplyr::select(-ID_FISHNET, -ID_fishnet, -slope_max), method="glm", family="binomial",
-# trControl = ctrl)
 
 cvFit_calgaryReg
 ```
 
 ```{r}
-
 ggplot(as.data.frame(cvFit_calgaryReg$resample), aes(Accuracy)) + 
   geom_histogram() +
   scale_x_continuous(limits = c(0, 1)) +
   labs(x="Accuracy",
-       y="Count")
+       y="Count") +plotTheme()
 ```
 ```{r}
 allPredictions <- 
