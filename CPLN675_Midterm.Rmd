@@ -18,6 +18,7 @@ library(knitr)
 library(kableExtra)
 library(FNN)
 library(scales)
+library(jtools)
 library(viridis)
 
 
@@ -448,13 +449,57 @@ testProbs <- data.frame(obs = as.numeric(calgaryTest$inundation),
 ggplot(testProbs, aes(x = pred, fill=as.factor(obs))) + geom_density() +
   facet_grid(obs ~ .) + xlab("Probability") + geom_vline(xintercept = .5) +
   scale_fill_manual(values = c("dodgerblue4", "darkgreen"),
-                      labels = c("Not Inundated","Inundated")) +
+                      labels = c("Not Inundated","Inundated"),
+                                 name="") +
                       labs(title = "Distribution of Probabilities") + plotTheme()
+```
+## Finding the Optimal Threshold
+In order to best optimize this model for use, identifying the threshold that provides the greatest accuracy is important. This is done by running the `iterateThresholds` function and looking at the results for all thresholds the table of thresholds 0.01 through 0.99. The optimal threshold in this case is 0.38.
+
+```{r}
+# iterateThresholds function
+iterateThresholds <- function(data, group) {
+   group <- enquo(group)
+  x = .01
+  all_prediction <- data.frame()
+  while (x <= 1) {
+
+  this_prediction <-
+      testProbs %>%
+      mutate(predOutcome = ifelse(pred > x, 1, 0)) %>%
+         group_by(!!group) %>%
+      dplyr::count(predOutcome, obs) %>%
+      dplyr::summarize(sum_TN = sum(n[predOutcome==0 & obs==0]),
+                sum_TP = sum(n[predOutcome==1 & obs==1]),
+                sum_FN = sum(n[predOutcome==0 & obs==1]),
+                sum_FP = sum(n[predOutcome==1 & obs==0]),
+            total=sum(n)) %>%
+    mutate(True_Positive = sum_TP / total,
+         True_Negative = sum_TN / total,
+         False_Negative = sum_FN / total,
+         False_Positive = sum_FP / total,
+         Accuracy = (sum_TP + sum_TN) / total, Threshold = x)
+
+  all_prediction <- rbind(all_prediction, this_prediction)
+  x <- x + .01
+  }
+return(all_prediction)
+}
 ```
 
 ```{r}
-#changed the threshold to 0.4
-testProbs$predClass  = ifelse(testProbs$pred > .4 ,1,0)
+whichThreshold <- iterateThresholds(testProbs)
+
+allThresholds<-kable(whichThreshold) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE)%>%
+  scroll_box(width = "100%", height = "500px")
+
+allThresholds
+```
+
+
+```{r}
+testProbs$predClass  = ifelse(testProbs$pred > .38 ,1,0)
 
 xtab.regCalgary <- caret::confusionMatrix(reference = as.factor(testProbs$obs), 
                        data = as.factor(testProbs$predClass), 
@@ -509,6 +554,21 @@ ggplot(as.data.frame(cvFit_calgaryReg$resample), aes(Accuracy)) +
   labs(x="Accuracy",
        y="Count") +plotTheme()
 ```
+
+```{r}
+dplyr::select(cvFit_calgaryReg$resample, -Resample) %>%
+  gather(metric, value) %>%
+  left_join(gather(cvFit_calgaryReg$results[2:4], metric, mean)) %>%
+  ggplot(aes(value)) +
+    geom_histogram(bins=35, fill = "#f7b61f") +
+    facet_wrap(~metric) +
+    geom_vline(aes(xintercept = mean), colour = "red", linetype = 3, size = 1.5) +
+    scale_x_continuous(limits = c(0, 1)) +
+    labs(x="Goodness of Fit", y="Count", title="Accuracy and Kappa",
+         subtitle = "Across-fold mean represented as dotted lines")
+```
+
+
 ```{r}
 allPredictions <- 
   predict(cvFit_calgaryReg, calgary_fishnet_final, type="prob")[,2]
@@ -528,46 +588,3 @@ ggplot() +
   mapTheme() +
   labs(title="")
 ```
-## still workin on thresholds, this function needs updated variables to match what we have goin on
-
-```{r}
-# iterateThresholds function
-iterateThresholds <- function(data, group) {
-   group <- enquo(group)
-  x = .01
-  all_prediction <- data.frame()
-  while (x <= 1) {
-
-  this_prediction <-
-      testProbs %>%
-      mutate(predOutcome = ifelse(Probs > x, 1, 0)) %>%
-         group_by(!!group) %>%
-      dplyr::count(predOutcome, Outcome) %>%
-      dplyr::summarize(sum_TN = sum(n[predOutcome==0 & Outcome==0]),
-                sum_TP = sum(n[predOutcome==1 & Outcome==1]),
-                sum_FN = sum(n[predOutcome==0 & Outcome==1]),
-                sum_FP = sum(n[predOutcome==1 & Outcome==0]),
-            total=sum(n)) %>%
-    mutate(True_Positive = sum_TP / total,
-         True_Negative = sum_TN / total,
-         False_Negative = sum_FN / total,
-         False_Positive = sum_FP / total,
-         Accuracy = (sum_TP + sum_TN) / total, Threshold = x)
-
-  all_prediction <- rbind(all_prediction, this_prediction)
-  x <- x + .01
-  }
-return(all_prediction)
-}
-```
-
-```{r}
-whichThreshold <- iterateThresholds(testProbs)
-
-allThresholds<-kable(whichThreshold) %>%
-  kable_styling(bootstrap_options = "striped", full_width = FALSE)%>%
-  scroll_box(width = "100%", height = "500px")
-
-allThresholds
-```
-
