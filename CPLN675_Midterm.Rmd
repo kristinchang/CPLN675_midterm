@@ -67,19 +67,9 @@ plotTheme <- function(base_size = 12) {
 
 # Introduction
 Text yay.
-# Data
+# Calgary Data
 Text yay.
 ## Initial Data
-Text here about the fishnet preparation (200x200m cells), and the inundation variable reclassification in ArcGIS pro
-## Feature Engineering
-Text here to describe process of feature engineering in ArcGIS pro for each one:
-** Elevation (mean)
-** Flow Accumulation (maximum)
-** Distance to nearest stream (archydro workflow)
-** Slope (maximum) --- if we don't use this, can still talk about the process
-** Distance to Steep Slopes (defining steep slope as at least 10 degrees)
-** Land Cover - Impervious Surface (sum of impervious pixels, if we go with that)
-
 ```{r, load fishnet for calgary}
 # CALGARY: Load Calgary fishnet generated in ArcGIS Pro (200x200m cells).
 calgary_fishnet <- st_read("Data_Calgary/Calgary_new/for_R/calgary_fishnet.shp") %>%
@@ -124,7 +114,6 @@ calgary_fishnet_new <- calgary_elev_grid
 
 ```
 
-
 ```{r, streams and flow acc for calgary}
 # CALGARY: Stream network, generated using the ArcHydro workflow from the week4 lab in ArcGIS Pro.
 calgary_streams <- st_read("HydroData_Calgary_ArcGIS/Data/cal_stream.shp") %>%
@@ -135,7 +124,7 @@ calgary_streams_neardist <- st_read("Data_Calgary/Calgary_new/for_R/cal_stream_n
   dplyr::rename(ID_FISHNET = IN_FID) %>%
   dplyr::rename(dist_stream = NEAR_DIST)
 
-##FYI was having trouble calculating distance to line using dist2Line in geosphere package in R, so decided to use the generate near table in ArcGIS to calculate from fishnet to stream. I have no idea if it used the centroid, though.
+##use the generate near table in ArcGIS to calculate from fishnet to stream. I have no idea if it used the centroid, though.
 
 calgary_streams_neardist$ID_FISHNET <-as.character(calgary_streams_neardist$ID_FISHNET)
 
@@ -152,7 +141,6 @@ calgary_flowacc$ID_FISHNET <-as.character(calgary_flowacc$ID_FISHNET)
 calgary_flowacc_grid <- full_join(calgary_flowacc, calgary_fishnet_new) %>%st_as_sf()
 calgary_fishnet_new <- calgary_flowacc_grid 
 ```
-
 
 ```{r, map streams for calgary just to see what's up}
 #visualize streams
@@ -190,7 +178,6 @@ ggplot() +
 ```{r, number of hydrology feature intersections per fishnet cell}
 calgary_fishnet_new <- calgary_fishnet_new %>% mutate(n_hydro_int = lengths(st_intersects(calgary_fishnet_new, calgary_hydro)))
 ```
-
 
 ```{r, slope max and distance to steep slopes for calgary}
 # CALGARY: Slope max per fishnet cell. Generated using zonal statistics (max).
@@ -233,7 +220,6 @@ calgary_fishnet_new <- calgary_impervious_sum_grid
 
 ```
 
-
 Talk about trimming the fishnet down by doing a select-by-centroids approach.
 ```{r, select fishnet cells by centroid}
 # Centroid-in-polygon join to see which cells have their centroid in the calgary boundary
@@ -275,7 +261,16 @@ calgary_fishnet_final$dist_parks <-as.numeric(as.character(calgary_fishnet_final
 calgary_fishnet_final$steepslope_dist <-as.numeric(as.character(calgary_fishnet_final$steepslope_dist))
 ```
 
-## Feature Engineering: Maps of Independent Variables
+## Maps of Independent Variables
+
+```{r}
+ggplot() +
+  geom_sf(data = calgary_fishnet_final, aes(fill = elevation_mean), color=NA) +
+  scale_fill_viridis()+
+  labs(title = "Elevation (mean)", fill="Elevation Mean \n(meters)") + mapTheme()
+
+```
+
 ```{r}
 #distance to streams
 ggplot() +
@@ -284,30 +279,32 @@ ggplot() +
   labs(title = "Distance to Streams", fill="Distance \n(meters)") + mapTheme()
 ```
 ```{r}
-#number of hydrology feature intersections
-ggplot() +
-  geom_sf(data = calgary_fishnet_final, aes(fill = n_hydro_int), color=NA) +
-  scale_fill_viridis()+
-  labs(title = "Hydrology Intersections", fill="Number") + mapTheme()
-```
-
-```{r}
 ggplot() +
   geom_sf(data = calgary_fishnet_final, aes(fill = flowacc_max), color=NA) +
   scale_fill_viridis()+
   labs(title = "Flow Accumulation, Maximum", fill="Max. Acc") + mapTheme()
-```
-```{r}
-ggplot() +
-  geom_sf(data = calgary_fishnet_final, aes(fill = elevation_mean), color=NA) +
-  scale_fill_viridis()+
-  labs(title = "Elevation (mean)", fill="Elevation Mean \n(meters)") + mapTheme()
+
 ```
 ```{r}
 ggplot() +
   geom_sf(data = calgary_fishnet_final, aes(fill = steepslope_dist), color=NA) +
   scale_fill_viridis()+
   labs(title = "Distance to Steep Slopes", fill="Distance \n(meters)", subtitle = "Steep slopes defined as at least 10 degrees") + mapTheme()
+```
+```{r}
+#distance to parks
+ggplot() +
+  geom_sf(data = calgary_fishnet_final, aes(fill = dist_parks), color=NA) +
+  scale_fill_viridis()+
+  labs(title = "Distance to Parks", fill="Distance \n(meters)") + mapTheme()
+```
+
+```{r}
+#number of hydrology feature intersections
+ggplot() +
+  geom_sf(data = calgary_fishnet_final, aes(fill = n_hydro_int), color=NA) +
+  scale_fill_viridis()+
+  labs(title = "Hydrology Intersections", fill="Number") + mapTheme()
 ```
 
 
@@ -320,7 +317,6 @@ ggplot() +
 #st_write(calgary_fishnet_final, "calgary_fishnet_final_new.csv")
 
 ```
-## Modeling
 
 ```{r}
 inundationPlotVariables <- 
@@ -330,8 +326,8 @@ inundationPlotVariables <-
 ```{r}
 # plotting independent variables for elevation_mean and slope_max
 calgary_fishnet_variables <- inundationPlotVariables %>%
-  dplyr::select(inundation, elevation_mean, steepslope_dist, dist_stream, dist_parks, slope_max) %>%
-  gather(key, value, elevation_mean:slope_max)%>%
+  dplyr::select(inundation, elevation_mean, steepslope_dist, dist_stream, dist_parks) %>%
+  gather(key, value, elevation_mean:dist_parks)%>%
    mutate(value = ifelse(key == "slope_max", value*100, value))
 
 
@@ -341,16 +337,15 @@ ggplot(calgary_fishnet_variables, aes(as.factor(inundation), value, fill=as.fact
     scale_y_continuous(labels = comma) +
   scale_fill_manual(values = c("dodgerblue4", "darkgreen"),
                     labels = c("Not Inundated","Inundated"),
-                    name = "")   + labs(x="Inundation", y="Value")
+                    name = "")   + labs(x="Inundation", y="Value") + plotTheme()
 ```
 
-```{r}
-
+```{r eval=FALSE, include=FALSE}
 #plotting these again, but this time using stat="summary" and mean for the function. also, scaling slope to see if there is a discernable difference. 
 calgary_fishnet_variables <- inundationPlotVariables %>%
-  dplyr::select(inundation, elevation_mean, steepslope_dist, dist_stream, dist_parks, slope_max) %>%
-  gather(key, value, elevation_mean:slope_max) %>%
-   mutate(value = ifelse(key == "slope_max", value*100, value))
+  dplyr::select(inundation, elevation_mean, steepslope_dist, dist_stream, dist_parks) %>%
+  gather(key, value, elevation_mean:dist_parks)
+#%>%  mutate(value = ifelse(key == "slope_max", value*100, value))
 
 
 ggplot(calgary_fishnet_variables, aes(as.factor(inundation), value, fill=as.factor(inundation))) + 
@@ -410,6 +405,7 @@ ggplot(calgary_fishnet_variable_nhydroint, aes(as.factor(inundation), value, fil
                     name = "")   + labs(x="Inundation", y="Value") +plotTheme()
 ```
 
+## Modeling
 
 ```{r}
 set.seed(3456)
@@ -431,7 +427,7 @@ calgaryModel <- glm(inundation ~ ., family="binomial"(link="logit"),
 summary(calgaryModel)
 ```
 ```{r}
-library(jtools)
+
 summ(calgaryModel)
 
 ```
@@ -439,7 +435,7 @@ summ(calgaryModel)
 ```{r}
 classProbs <- predict(calgaryModel, calgaryTest, type="response")
 
-hist(classProbs)
+hist(classProbs) +plotTheme()
 ```
 
 ```{r}
@@ -519,7 +515,7 @@ as.matrix(xtab.regCalgary, what="classes") %>% kable(caption = "Confusion Matrix
 ggplot(testProbs, aes(d = obs, m = pred)) + 
   geom_roc(n.cuts = 50, labels = FALSE) + 
   style_roc(theme = theme_grey) +
-  geom_abline(slope = 1, intercept = 0, size = 1.5, color = 'grey') 
+  geom_abline(slope = 1, intercept = 0, size = 1.5, color = 'grey') +plotTheme()
 ```
 ```{r}
 auc_calgary <- auc(testProbs$obs, testProbs$pred)
