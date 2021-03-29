@@ -1,2 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<metadata xml:lang="en"><Esri><CreaDate>20210324</CreaDate><CreaTime>21345700</CreaTime><ArcGISFormat>1.0</ArcGISFormat><SyncOnce>TRUE</SyncOnce><DataProperties><lineage><Process ToolSource="c:\program files\arcgis\pro\Resources\ArcToolbox\toolboxes\Conversion Tools.tbx\RasterToPolygon" Date="20210324" Time="213457">RasterToPolygon cal_basin C:\Users\jenna\Documents\GitHub\CPLN675_midterm\midterm_ArcGIS\cal_boundary.shp SIMPLIFY VALUE SINGLE_OUTER_PART #</Process></lineage></DataProperties></Esri></metadata>
