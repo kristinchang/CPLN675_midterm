@@ -116,8 +116,9 @@ calgary_fishnet_new <- calgary_elev_grid
 
 ```{r, streams and flow acc for calgary}
 # CALGARY: Stream network, generated using the ArcHydro workflow from the week4 lab in ArcGIS Pro.
-calgary_streams <- st_read("HydroData_Calgary_ArcGIS/Data/cal_stream.shp") %>%
-  dplyr::rename(ID_stream = arcid) 
+calgary_streams <- st_read("Data_Calgary/Calgary_new/for_R/Hydrology/cal_stream.shp") %>% st_as_sf() 
+
+calgary_streams <-calgary_streams %>%  st_transform('EPSG:3780')
 
 calgary_streams_neardist <- st_read("Data_Calgary/Calgary_new/for_R/cal_stream_neardist.xls")  %>%
   dplyr::select(-Rowid, -OBJECTID, -NEAR_FID) %>%
@@ -423,22 +424,21 @@ calgaryModel <- glm(inundation ~ ., family="binomial"(link="logit"),
 
 ```
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 summary(calgaryModel)
 ```
-```{r}
-
+```{r calgaryModel summ, message=FALSE, warning=FALSE}
 summ(calgaryModel)
 
 ```
 
-```{r}
+```{r, create classProbs and classProbs histogram}
 classProbs <- predict(calgaryModel, calgaryTest, type="response")
 
-hist(classProbs) +plotTheme()
+hist((classProbs), main = paste("Histogram of classProbs"), col = "blue", xlab = "Inundation Probability") + plotTheme()
 ```
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 testProbs <- data.frame(obs = as.numeric(calgaryTest$inundation),
                         pred = classProbs,
                         ID_FISHNET = calgaryTest$ID_FISHNET)
@@ -453,7 +453,7 @@ ggplot(testProbs, aes(x = pred, fill=as.factor(obs))) + geom_density() +
 ## Finding the Optimal Threshold
 In order to best optimize this model for use, identifying the threshold that provides the greatest accuracy is important. This is done by running the `iterateThresholds` function and looking at the results for all thresholds the table of thresholds 0.01 through 0.99. The optimal threshold in this case is 0.38.
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 # iterateThresholds function
 iterateThresholds <- function(data, group) {
    group <- enquo(group)
@@ -484,7 +484,7 @@ return(all_prediction)
 }
 ```
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 whichThreshold <- iterateThresholds(testProbs)
 
 allThresholds<-kable(whichThreshold) %>%
@@ -495,7 +495,7 @@ allThresholds
 ```
 
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 testProbs$predClass  = ifelse(testProbs$pred > .38 ,1,0)
 
 xtab.regCalgary <- caret::confusionMatrix(reference = as.factor(testProbs$obs), 
@@ -503,14 +503,14 @@ xtab.regCalgary <- caret::confusionMatrix(reference = as.factor(testProbs$obs),
                        positive = "1")
 ```
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 as.matrix(xtab.regCalgary) %>% kable(caption = "Confusion Matrix") %>% kable_styling("striped", full_width = T, font_size = 14, position = "left")
 ```
-```{r}
+```{r message=FALSE, warning=FALSE}
 as.matrix(xtab.regCalgary, what="classes") %>% kable(caption = "Confusion Matrix - Statistics") %>% kable_styling(font_size = 14, full_width = T,
                 bootstrap_options = c("striped", "hover"))
 ```
-```{r}
+```{r message=FALSE, warning=FALSE}
 test_predictions <- testProbs %>%
   mutate(TN = predClass==0 & obs==0,
          TP = predClass==1 & obs==1,
@@ -537,26 +537,26 @@ ggplot() +
 
 ```
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 ggplot(testProbs, aes(d = obs, m = pred)) + 
   geom_roc(n.cuts = 50, labels = FALSE) + 
   style_roc(theme = theme_grey) +
   geom_abline(slope = 1, intercept = 0, size = 1.5, color = 'grey') +   labs(title="ROC Curve") + plotTheme()
 ```
-```{r}
+```{r message=FALSE, warning=FALSE}
 auc_calgary <- auc(testProbs$obs, testProbs$pred)
 print(auc_calgary)
 ```
 
 ## Cross-validation
-```{r}
+```{r message=FALSE, warning=FALSE}
 #convert inundation to factor
 calgary_fishnet_final$inundation <-as.factor(as.character(calgary_fishnet_final$inundation))
 
 
 ```
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 ctrl <- trainControl(method = "cv", 
                      number = 100,
                      savePredictions = TRUE)
@@ -577,7 +577,7 @@ ggplot(as.data.frame(cvFit_calgaryReg$resample), aes(Accuracy)) +
        y="Count") +plotTheme()
 ```
 
-```{r, accuracy and kappa}
+```{r message=FALSE, warning=FALSE}
 dplyr::select(cvFit_calgaryReg$resample, -Resample) %>%
   gather(metric, value) %>%
   left_join(gather(cvFit_calgaryReg$results[2:4], metric, mean)) %>%
@@ -591,7 +591,7 @@ dplyr::select(cvFit_calgaryReg$resample, -Resample) %>%
 ```
 
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 allPredictions <- 
   predict(cvFit_calgaryReg, calgary_fishnet_final, type="prob")[,2]
   
@@ -600,7 +600,7 @@ calgary_fishnet_final_preds <- calgary_fishnet_final %>%
   mutate(allPredictions = round(allPredictions * 100)) 
 ```
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 ggplot() + 
     geom_sf(data=calgary_fishnet_final_preds, aes(fill=(allPredictions)), colour=NA) +
   scale_fill_viridis(name = "Probability")+
@@ -634,7 +634,7 @@ den_fishnet$FID <-as.character(den_fishnet$FID)
 ```
 
 ```{r, load boundary for denver}
-den_boundary <- st_read("Data_Denver/county_boundary.shp")
+den_boundary <- st_read("Data_Denver/county_boundary.shp") # need full shp package
 
 den_boundary <- den_boundary %>% st_crs(den_fishnet)
 ```
