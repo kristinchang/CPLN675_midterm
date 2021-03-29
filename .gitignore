@@ -3,8 +3,4 @@
 .RData
 .Ruserdata
 <<<<<<< Updated upstream
-/HydroData_Calgary_ArcGIS
-=======
-HydroData_Calgary_ArcGIS
-NOT_FOR_GITHUB
->>>>>>> Stashed changes
+HydroData_Calgary_ArcGIS/
