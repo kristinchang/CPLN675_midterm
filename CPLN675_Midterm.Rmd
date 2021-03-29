@@ -2,12 +2,50 @@
 title: "CPLN675_midterm"
 author: "Jenna Epstein and Kristin Chang"
 date: "March 31, 2021"
-output: html_document
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+    
+    
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+options(scipen = 999)
+```
 
+# Introduction
+According to the World Health Organization, floods are the most frequent natural disaster affecting countries across the globe. Floods have the potential to leave communities devastated not only because of the direct loss of life due to drowning and infrastructure damage, but also because of indirect impacts such as increased transmission of disease, higher risk of injury and hypothermia, disrupted or disabled infrastructure systems, and increased likelihood of causing other natural disasters. In the past ten years, climate change has exacerbated the effects of natural disasters like flooding, drought, sea level rise, and extreme precipitation and their frequency and intensity are expected to continue to rise if left unchecked.
+
+City Planners have the utmost responsibility to ensure their cities are prepared to respond to such natural disasters and minimize harm to their most vulnerable communities. The following document outlines a machine learning algorithm that predicts which areas of a city are at the highest risk of flooding disasters. An Emergency Management team can use the resulting model of this algorithm to inform their preparedness tactics to minimize damage and respond to future flooding disasters more efficiently. Ultimately, the algorithm is a helpful tool for individuals in Public Works, Public Health, City Planning, and Community-Based Organizations to proactively plan for resilience. 
+
+This document explains each step of the algorithmic process such that City Planning departments can input their city’s data and accurately interpret the resulting model. The model is created using past flood data from the City of Calgary in Canada to measure accuracy and then is applied to the City of Denver in the United States to measure generalizability. 
+```{r}
+#code used to generate introductory map, for reference.
+#ggplot() + 
+#  geom_sf(data=calgary_fishnet_final, aes(fill=as.factor(inundation)), color=NA) +
+#  scale_fill_manual(values = c("navy", "darkgreen"),
+#                    labels = c("yes","no"),
+#                    name = "Inundation: \nDid Flooding Occur?") +
+#  labs(title="Inundation in Calgary", subtitle = "Extent derived from raster from June 2013 flooding") +
+# # geom_sf(data=calgary_boundary, color="black", fill=NA)+
+#  mapTheme()
+
+```
+
+```{r fireprobcell, echo=FALSE, out.width="60%", fig.show='hold', fig.align='center'}
+knitr::include_graphics("C:/Users/jenna/Documents/GitHub/CPLN675_midterm/cal_inundation_intromap.png")
+```
+
+# Setup
+The algorithm was created using ArcGIS Pro and R. First, the necessary R libraries are loaded and themes are defined for the maps and plots that will be displayed later in the process.
+
+```{r load libraries and functions, message=FALSE, warning=FALSE}
+# SETUP
+
+# load libraries
 library(caret)
 library(pscl)
 library(plotROC)
@@ -22,7 +60,7 @@ library(jtools)
 library(viridis)
 
 
-#themes and palettes
+# load themes and palettes
 mapTheme <- function(base_size = 12) {
   theme(
     text = element_text( color = "black"),
@@ -62,34 +100,37 @@ plotTheme <- function(base_size = 12) {
   )
 }
 
-
 ```
 
-# Introduction
-Text yay.
 # Calgary Data
-Text yay.
+
 ## Initial Data
-```{r, load fishnet for calgary}
+The fishnet was generated in ArcGIS Pro using the **Create Fishnet** tool in order to generate a grid of the appropriate extent with 200 Meter by 200 Meter cells as the unit of measurement. This cell size was determined using the overall extent of the city boundary and the size of the resulting dataset. Cell size will vary depending on the city of focus and the computing power of the machine being used. 
+
+The inundation raster data was also generated in ArcGIS Pro using the **Reclassify** tool to indicate pixels within the flooding extent and pixels outside of the flooding extent. Inundated pixels are assigned a value of 1 and not inundated pixels are assigned a value of 0. **Zonal Statistics** were then used to calculate the maximum level of flooding per fishnet grid cell in order to visualize and identify which grid cells are at the highest risk of flooding. 
+
+```{r initial fishnet and boundary, message=FALSE, warning=FALSE, results='hide'}
 # CALGARY: Load Calgary fishnet generated in ArcGIS Pro (200x200m cells).
 calgary_fishnet <- st_read("Data_Calgary/Calgary_new/for_R/calgary_fishnet.shp") %>%
 st_as_sf() %>% st_transform('EPSG:3780') %>% rename(ID_FISHNET = ID_fishnet)
 
 calgary_fishnet$ID_FISHNET <-as.character(calgary_fishnet$ID_FISHNET)
 
-```
-Load the boundary for Calgary, the initial fishnet, and visualize. Note that the inundation raster provided does not cover the whole city, so the study area will be trimmed down later on.
-```{r, load boundary for calgary}
 calgary_boundary <- st_read("provided_midTermProject_Data/CALGIS_CITYBOUND_LIMIT/CALGIS_CITYBOUND_LIMIT.shp")
-
 calgary_boundary <- calgary_boundary %>% st_transform('EPSG:3780')
 
-ggplot() +
-  geom_sf(data=calgary_boundary, fill="grey") +
-  geom_sf(data=calgary_fishnet, alpha=0.2) + mapTheme()
+#ggplot() +
+#  geom_sf(data=calgary_boundary, fill="grey") +
+#  geom_sf(data=calgary_fishnet, alpha=0.2) + mapTheme()
+
 ```
 
-```{r, load arcgis features for calgary}
+## Feature Engineering
+Next, data for features that contribute to flooding and flood risk is loaded into ArcGIS Pro for calculations. The following sections describe this process in brief and explains why they are included in the model or not. Once the calculations are complete, the resulting data tables are exported from ArcGIS Pro and loaded into R to inform the model. We also used a select-by-centroids approach to select fishnet grid cells that have centroids situated within the 2013 flood extent.
+
+Knowledge about the characteristics of the land such as topography, land cover, and hydrology can indicate how susceptible the area is to floods. 
+
+```{r all code for feature engineering to run before creating maps, message=FALSE, warning=FALSE, results='hide'}
 # CALGARY: Inundation classification (generated by reclassifying the initial inundation raster, and calculated using zonal statistics (maximum)).
 calgary_inundation <- st_read("Data_Calgary/Calgary_new/for_R/cal_inun_max.xls") %>%
   dplyr::select(ID_FISHNET, MAX) %>%
@@ -111,10 +152,6 @@ calgary_elev$ID_FISHNET <-as.character(calgary_elev$ID_FISHNET)
 calgary_elev_grid <- full_join(calgary_elev, calgary_fishnet_new) %>% st_as_sf()
 calgary_fishnet_new <- calgary_elev_grid
 
-
-```
-
-```{r, streams and flow acc for calgary}
 # CALGARY: Stream network, generated using the ArcHydro workflow from the week4 lab in ArcGIS Pro.
 calgary_streams <- st_read("Data_Calgary/Calgary_new/for_R/Hydrology/cal_stream.shp") %>% st_as_sf() 
 
@@ -125,8 +162,7 @@ calgary_streams_neardist <- st_read("Data_Calgary/Calgary_new/for_R/cal_stream_n
   dplyr::rename(ID_FISHNET = IN_FID) %>%
   dplyr::rename(dist_stream = NEAR_DIST)
 
-##use the generate near table in ArcGIS to calculate from fishnet to stream. I have no idea if it used the centroid, though.
-
+## used the generate near table in ArcGIS to calculate from fishnet to stream
 calgary_streams_neardist$ID_FISHNET <-as.character(calgary_streams_neardist$ID_FISHNET)
 
 calgary_streamneardist_grid <- full_join(calgary_streams_neardist, calgary_fishnet_new) %>% st_as_sf()
@@ -141,19 +177,9 @@ calgary_flowacc$ID_FISHNET <-as.character(calgary_flowacc$ID_FISHNET)
 
 calgary_flowacc_grid <- full_join(calgary_flowacc, calgary_fishnet_new) %>%st_as_sf()
 calgary_fishnet_new <- calgary_flowacc_grid 
-```
 
-```{r, map streams for calgary just to see what's up}
-#visualize streams
-ggplot() +
-  geom_sf(data=calgary_boundary, fill="grey") +
-  #geom_sf(data=calgary_fishnet, alpha=0.2) + 
-  geom_sf(data=calgary_streams, color="blue") +mapTheme()
-```
 
-```{r, parks distance load from arcgis}
 # CALGARY: Parks distance - from open data calgary. Used arcgis pro to create a near distance table.
-
 calgary_parks_neardist <- st_read("Data_Calgary/Calgary_new/for_R/cal_parksfeat_near.xls")  %>%
   dplyr::select(-Rowid, -OBJECTID, -NEAR_FID) %>%
   dplyr::rename(ID_FISHNET = IN_FID) %>%
@@ -163,25 +189,10 @@ calgary_parks_neardist$ID_FISHNET <-as.character(calgary_parks_neardist$ID_FISHN
 
 calgary_parks_neardist_grid <- full_join(calgary_parks_neardist, calgary_fishnet_new) %>% st_as_sf()
 calgary_fishnet_new <-  calgary_parks_neardist_grid
-```
-```{r, import shapefile of hydrology features}
-#shapefile import
-calgary_hydro <- st_read("Data_Calgary/Calgary_new/for_R/Hydrology/hydrology_features.shp") %>%
-  st_transform(st_crs(calgary_fishnet_new))
 
-#visualize hydrology features - more extensive than what the stream network from ArcGIS provided
-ggplot() +
-  geom_sf(data=calgary_boundary, fill="grey") +
-  #geom_sf(data=calgary_fishnet, alpha=0.2) + 
-  geom_sf(data=calgary_hydro, color="blue") +mapTheme()
 
-```
-```{r, number of hydrology feature intersections per fishnet cell}
-calgary_fishnet_new <- calgary_fishnet_new %>% mutate(n_hydro_int = lengths(st_intersects(calgary_fishnet_new, calgary_hydro)))
-```
+# CALGARY: Slope max per fishnet cell. Generated using zonal statistics (max). Ended up not using this in the model, but still explored in feature engineering.
 
-```{r, slope max and distance to steep slopes for calgary}
-# CALGARY: Slope max per fishnet cell. Generated using zonal statistics (max).
 calgary_slope <- st_read("Data_Calgary/Calgary_new/for_R/cal_slope_max.xls") %>%
   dplyr::rename(slope_max = MAX) %>%
   dplyr::select(-Rowid, -COUNT, -AREA, -ZONE.CODE)
@@ -202,27 +213,33 @@ calgary_steepslope_dist$ID_FISHNET <-as.character(calgary_steepslope_dist$ID_FIS
 calgary_steepslope_dist_grid <- full_join(calgary_steepslope_dist, calgary_fishnet_new) %>%st_as_sf()
 calgary_fishnet_new <- calgary_steepslope_dist_grid 
 
-```
+# CALGARY: Intersections with hydro features
+#shapefile import
+calgary_hydro <- st_read("Data_Calgary/Calgary_new/for_R/Hydrology/hydrology_features.shp") %>%
+  st_transform(st_crs(calgary_fishnet_new))
 
-```{r, impervious land cover sum  for calgary}
-# CALGARY: majority land cover type per fishnet cell. Reclassified the data by land cover category 1-17, converted it to a raster, and used zonal statistics (majority).
+#visualize hydrology features - more extensive than what the stream network from ArcGIS hydrology workflow. so it is streams + major hydrology features like lakes and ponds, etc.
+#ggplot() +
+#  geom_sf(data=calgary_boundary, fill="grey") +
+#  #geom_sf(data=calgary_fishnet, alpha=0.2) + 
+#  geom_sf(data=calgary_hydro, color="blue") +mapTheme()
+
+calgary_fishnet_new <- calgary_fishnet_new %>% mutate(n_hydro_int = lengths(st_intersects(calgary_fishnet_new, calgary_hydro)))
+
+# CALGARY: majority land cover type per fishnet cell. Reclassified the data by land cover impervious and not impervious, converted it to a raster, and used zonal statistics (sum) for pixels. Not used in the model ultimately, but still explored in feature engineering process - worthwhile to discuss.
 
 calgary_impervious_sum <- st_read("Data_Calgary/Calgary_new/for_R/cal_lcimp_sumt.xls") %>%
   dplyr::rename(imperv_pixels_sum = SUM) %>%
   dplyr::select(-Rowid, -COUNT, -AREA, -ZONE.CODE)
 
 calgary_impervious_sum$ID_FISHNET <-as.character(calgary_impervious_sum$ID_FISHNET)
-
 calgary_impervious_sum_grid <- full_join(calgary_impervious_sum, calgary_fishnet_new) %>% st_as_sf()
-
 calgary_impervious_sum_grid[is.na(calgary_impervious_sum_grid)] = 0
-
 calgary_fishnet_new <- calgary_impervious_sum_grid
 
 ```
 
-Talk about trimming the fishnet down by doing a select-by-centroids approach.
-```{r, select fishnet cells by centroid}
+```{r calgary select fishnet cells by centroid, message=FALSE, warning=FALSE, results='hide' }
 # Centroid-in-polygon join to see which cells have their centroid in the calgary boundary
 calgary_selectCentroids <-
   st_centroid(calgary_fishnet_new)[calgary_boundary,] %>%
@@ -234,20 +251,19 @@ calgary_fishnet_final <- calgary_selectCentroids
 
 ```
 
-
-```{r}
+```{r calgary inundation by way of fishnet, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE, results='hide'}
 ggplot() + 
   geom_sf(data=calgary_fishnet_final, aes(fill=as.factor(inundation)), color=NA) +
   scale_fill_manual(values = c("navy", "darkgreen"),
                     labels = c("yes","no"),
-                    name = "Inundation") +
-  labs(title="Inundation in Calgary", subtitle = "By way of the fishnet") +
-  geom_sf(data=calgary_boundary, color="black", fill=NA)+
+                    name = "Inundation: \nDid Flooding Occur?") +
+  labs(title="Inundation in Calgary", subtitle = "Extent derived from raster from June 2013 flooding") +
+ # geom_sf(data=calgary_boundary, color="black", fill=NA)+
   mapTheme()
 
 ```
 
-```{r, convert to numeric}
+```{r, convert variables all to numeric, message=FALSE, warning=FALSE, results='hide'}
 calgary_fishnet_final <- calgary_fishnet_final %>%
   dplyr::select(-Shape_Leng, -Shape_Area)
 
@@ -262,9 +278,14 @@ calgary_fishnet_final$dist_parks <-as.numeric(as.character(calgary_fishnet_final
 calgary_fishnet_final$steepslope_dist <-as.numeric(as.character(calgary_fishnet_final$steepslope_dist))
 ```
 
-## Maps of Independent Variables
+## Features Included in Model
 
-```{r}
+### Mean Elevation
+Elevation generally describes the topography of the land. Areas at lower levels of elevation are at higher risk for floods than areas at higher elevations. We explored calculating the lowest degree of elevation per fishnet grid cell in Calgary, but found that using the mean helped the performance of our model. Mean elevation is stored in the **`elevation_mean`** feature variable, measured in meters.
+
+To calculate our **`elevation_mean`** feature variable, a Digital Elevation Model (DEM) was loaded into ArcGIS Pro. **Zonal Statistics** were used to calculate the mean per fishnet grid cell.
+
+```{r message=FALSE, warning=FALSE, results='hide'}
 ggplot() +
   geom_sf(data = calgary_fishnet_final, aes(fill = elevation_mean), color=NA) +
   scale_fill_viridis()+
@@ -272,27 +293,49 @@ ggplot() +
 
 ```
 
-```{r}
+
+### Distance to Nearest Stream
+Understanding the structure of streams helps inform the intensity of potential flooding. If the water level of the stream exceeds the stream channel, then flooding occurs. Areas that are closer to streams are more vulnerable to floods than areas that are farther away.
+
+The hydrology tools in ArcGIS Pro are used to turn the Calgary DEM into a stream network. First, the **Fill** tool was used to fill any sinks. The resulting surface is input in the **Flow Direction** tool to generate a raster showing the direction of flow out of each pixel. Direction is used to calculate **Flow Accumulation** per pixel - this step is described further in the next feature section. Assuming a drainage threshold of 25 square kilometers, **Set Null** is used to calculate the number of pixels that represent a drainage of this area or more, assign these cells a value of 1 and all other pixels a value of NODATA. The resulting Calgary stream network is displayed below. Lastly, the **Generate Near Table** tool is used to calculate the distance of each fishnet grid cell to a stream, stored as the `dist_stream` feature variable, measured in meters.
+
+```{r cal streams map, message=FALSE, warning=FALSE, results='hide'}
+#visualize streams
+ggplot() +
+  geom_sf(data=calgary_boundary, fill="grey") +
+  #geom_sf(data=calgary_fishnet, alpha=0.2) + 
+  geom_sf(data=calgary_streams, color="blue") + labs(title="Stream Network in Calgary") + mapTheme()
+
 #distance to streams
 ggplot() +
   geom_sf(data = calgary_fishnet_final, aes(fill = dist_stream), color=NA) +
   scale_fill_viridis()+
   labs(title = "Distance to Streams", fill="Distance \n(meters)") + mapTheme()
 ```
-```{r}
+
+### Maximum Flow Accumulation
+Flooding occurs when water levels exceed the stream channel. Based on the direction of the streams calculated above, **Flow Accumulation** tool is used to calculate the accumulated weight of all pixels flowing into each downslope pixel in the raster. **Zonal Statistics** (maximum) is used to calculate the maximum flow accumulation per each fishnet grid cell. Using the maximum value allows us to evaluate at the highest risk level. In other words, the resulting model will present a “worst-case-scenario” picture enabling planners to be over-prepared rather than under-prepared. This feature variable is called **`flow_maxacc`**. 
+
+```{r message=FALSE, warning=FALSE, results='hide'}
 ggplot() +
   geom_sf(data = calgary_fishnet_final, aes(fill = flowacc_max), color=NA) +
   scale_fill_viridis()+
   labs(title = "Flow Accumulation, Maximum", fill="Max. Acc") + mapTheme()
 
 ```
-```{r}
+
+### Distance to Steep Slopes
+Text
+```{r message=FALSE, warning=FALSE, results='hide'}
 ggplot() +
   geom_sf(data = calgary_fishnet_final, aes(fill = steepslope_dist), color=NA) +
   scale_fill_viridis()+
   labs(title = "Distance to Steep Slopes", fill="Distance \n(meters)", subtitle = "Steep slopes defined as at least 10 degrees") + mapTheme()
 ```
-```{r}
+
+### Distance to Parks
+Text
+```{r message=FALSE, warning=FALSE, results='hide'}
 #distance to parks
 ggplot() +
   geom_sf(data = calgary_fishnet_final, aes(fill = dist_parks), color=NA) +
@@ -300,7 +343,9 @@ ggplot() +
   labs(title = "Distance to Parks", fill="Distance \n(meters)") + mapTheme()
 ```
 
-```{r}
+### Number of Hydrological Intersections
+Text
+```{r message=FALSE, warning=FALSE, results='hide'}
 #number of hydrology feature intersections
 ggplot() +
   geom_sf(data = calgary_fishnet_final, aes(fill = n_hydro_int), color=NA) +
@@ -309,36 +354,34 @@ ggplot() +
 ```
 
 
-
-```{r}
-
+```{r eval=FALSE, include=FALSE}
 #writing what I have so far to a .csv also in github, so you can also just load this back in and do a join to the fishnet shapefile (using ID_fishnet as the joiner)
-
-
 #st_write(calgary_fishnet_final, "calgary_fishnet_final_new.csv")
 
 ```
 
-```{r}
+## Plotting Features per Inundation Outcome
+Text
+
+```{r message=FALSE, warning=FALSE, results='hide'}
 inundationPlotVariables <- 
   calgary_fishnet_final %>% st_drop_geometry()
-```
 
-```{r}
 # plotting independent variables for elevation_mean and slope_max
 calgary_fishnet_variables <- inundationPlotVariables %>%
-  dplyr::select(inundation, elevation_mean, steepslope_dist, dist_stream, dist_parks) %>%
+  dplyr::select(inundation, elevation_mean, steepslope_dist, dist_stream, flowacc_max, n_hydro_int, dist_parks) %>%
   gather(key, value, elevation_mean:dist_parks)%>%
-   mutate(value = ifelse(key == "slope_max", value*100, value))
+   mutate(value = ifelse(key == "flowacc_max", value/10, value)) %>%
+  mutate(value=ifelse(key=="n_hydro_int", value*10000, value))
 
 
 ggplot(calgary_fishnet_variables, aes(as.factor(inundation), value, fill=as.factor(inundation))) + 
     geom_bar(stat = "identity")+
     facet_wrap(~key) +
     scale_y_continuous(labels = comma) +
-  scale_fill_manual(values = c("dodgerblue4", "darkgreen"),
-                    labels = c("Not Inundated","Inundated"),
-                    name = "")   + labs(x="Inundation", y="Value") + plotTheme()
+  scale_fill_manual(values = c("darkgreen", "navy"),
+                    labels = c("Not Flooded","Flooded"),
+                    name = "")   + labs(x="Inundation: Flooding or Not?", y="Value", title= "Independent Variables used in the Model", caption="\nNumber of hydro intersections scaled up by 10,000 \nFlow Accumulation (max) scaled down by 10") + plotTheme()
 ```
 
 ```{r eval=FALSE, include=FALSE}
@@ -357,9 +400,7 @@ ggplot(calgary_fishnet_variables, aes(as.factor(inundation), value, fill=as.fact
                     labels = c("Not Inundated","Inundated"),
                     name = "")   + labs(x="Inundation", y="Mean") +plotTheme()
 ```
-
-
-```{r}
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE, results='hide'}
 # flow accumulation max, visualizing separately
 calgary_fishnet_variable_imperv <- inundationPlotVariables %>%
   dplyr::select(inundation, flowacc_max) %>%
@@ -370,12 +411,11 @@ ggplot(calgary_fishnet_variable_imperv, aes(as.factor(inundation), value, fill=a
     geom_bar(stat = "identity")+
     facet_wrap(~key) +
       scale_y_continuous(labels = comma) +
-  scale_fill_manual(values = c("dodgerblue4", "darkgreen"),
+  scale_fill_manual(values = c("navy", "darkgreen"),
                     labels = c("Not Inundated","Inundated"),
                     name = "")   + labs(x="Inundation", y="Value") +plotTheme()
 ```
-
-```{r}
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE, results='hide'}
 #imperv surface was warping the scaling, so visualizing separately
 calgary_fishnet_variable_imperv <- inundationPlotVariables %>%
   dplyr::select(inundation, imperv_pixels_sum) %>%
@@ -386,11 +426,11 @@ ggplot(calgary_fishnet_variable_imperv, aes(as.factor(inundation), value, fill=a
     geom_bar(stat = "identity")+
     facet_wrap(~key) +
       scale_y_continuous(labels = comma) +
-  scale_fill_manual(values = c("dodgerblue4", "darkgreen"),
+  scale_fill_manual(values = c("navy", "darkgreen"),
                     labels = c("Not Inundated","Inundated"),
                     name = "")   + labs(x="Inundation", y="Value") +plotTheme()
 ```
-```{r}
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE, results='hide'}
 # number of hydro intersections, visualizing separately
 calgary_fishnet_variable_nhydroint <- inundationPlotVariables %>%
   dplyr::select(inundation, n_hydro_int) %>%
@@ -406,9 +446,16 @@ ggplot(calgary_fishnet_variable_nhydroint, aes(as.factor(inundation), value, fil
                     name = "")   + labs(x="Inundation", y="Value") +plotTheme()
 ```
 
-## Modeling
+## Other Features Explored
+Slope (maximum)
 
-```{r}
+Impervious surface pixel sums
+
+# Model Development & Testing on Calgary
+
+## Iterative Development Process
+
+```{r message=FALSE, warning=FALSE, results='hide'}
 set.seed(3456)
 trainIndex <- createDataPartition(calgary_fishnet_final$inundation, p = .70,
                                   list = FALSE,
@@ -417,26 +464,31 @@ calgaryTrain <- calgary_fishnet_final[ trainIndex,]
 calgaryTest  <- calgary_fishnet_final[-trainIndex,]
 ```
 
-```{r}
-calgaryModel <- glm(inundation ~ ., family="binomial"(link="logit"),
+```{r message=FALSE, warning=FALSE, results='hide'}
+inundationModel <- glm(inundation ~ ., family="binomial"(link="logit"),
                   data=(calgaryTrain) %>% as.data.frame() %>% dplyr::select(-ID_FISHNET, -geometry, -slope_max, -imperv_pixels_sum))
-
-
+ print(inundationModel)
 ```
+
+## Results
+### Model Summary
 
 ```{r eval=FALSE, include=FALSE}
-summary(calgaryModel)
+summary(inundationModel)
 ```
 ```{r calgaryModel summ, message=FALSE, warning=FALSE}
-summ(calgaryModel)
+summ(inundationModel)
 
 ```
+### Histogram of classProbs
 
-```{r, create classProbs and classProbs histogram}
-classProbs <- predict(calgaryModel, calgaryTest, type="response")
+```{r create classProbs and classProbs histogram, message=FALSE, warning=FALSE, results='hide'}
+classProbs <- predict(inundationModel, calgaryTest, type="response")
 
 hist((classProbs), main = paste("Histogram of classProbs"), col = "blue", xlab = "Inundation Probability") + plotTheme()
 ```
+
+### Distribution of Probabilities Visualization
 
 ```{r message=FALSE, warning=FALSE}
 testProbs <- data.frame(obs = as.numeric(calgaryTest$inundation),
@@ -445,15 +497,16 @@ testProbs <- data.frame(obs = as.numeric(calgaryTest$inundation),
 
 ggplot(testProbs, aes(x = pred, fill=as.factor(obs))) + geom_density() +
   facet_grid(obs ~ .) + xlab("Probability") + geom_vline(xintercept = .38) +
-  scale_fill_manual(values = c("dodgerblue4", "darkgreen"),
-                      labels = c("Not Inundated","Inundated"),
+  scale_fill_manual(values = c("darkgreen", "navy"),
+                      labels = c("Not Flooded","Flooded"),
                                  name="") +
                       labs(title = "Distribution of Probabilities") + plotTheme()
 ```
+
 ## Finding the Optimal Threshold
 In order to best optimize this model for use, identifying the threshold that provides the greatest accuracy is important. This is done by running the `iterateThresholds` function and looking at the results for all thresholds the table of thresholds 0.01 through 0.99. The optimal threshold in this case is 0.38.
 
-```{r message=FALSE, warning=FALSE}
+```{r iterate thresh function, message=FALSE, warning=FALSE, results='hide'}
 # iterateThresholds function
 iterateThresholds <- function(data, group) {
    group <- enquo(group)
@@ -503,13 +556,19 @@ xtab.regCalgary <- caret::confusionMatrix(reference = as.factor(testProbs$obs),
                        positive = "1")
 ```
 
+## Confusion Matrix
+
 ```{r message=FALSE, warning=FALSE}
 as.matrix(xtab.regCalgary) %>% kable(caption = "Confusion Matrix") %>% kable_styling("striped", full_width = T, font_size = 14, position = "left")
 ```
+## Confusion Matrix - Statistics
+
 ```{r message=FALSE, warning=FALSE}
 as.matrix(xtab.regCalgary, what="classes") %>% kable(caption = "Confusion Matrix - Statistics") %>% kable_styling(font_size = 14, full_width = T,
                 bootstrap_options = c("striped", "hover"))
 ```
+
+## Map of Predictions for Calgary Testing Set
 ```{r message=FALSE, warning=FALSE}
 test_predictions <- testProbs %>%
   mutate(TN = predClass==0 & obs==0,
@@ -536,19 +595,34 @@ ggplot() +
   labs(title="Map of Prediction Classes on Calgary Test")
 
 ```
+ 
+### Discussion/table of tradeoffs, etc.
+
+Type of Prediction | Description | Implication
+------------- | ------------- | -------------
+True Positives | We predict flooding to occur and flood does occur| Text
+False Positives | We predict flooding to occur and flooding does not occur | Text
+True Negatives | We do not predict flooding to occur and flooding does not occur | Text
+False Negatives | We do not predict flooding to occur and flooding does occur | Text
+
+### ROC Curve
+The Receiver Operating Characteristic (ROC) Curve for the model is shown below. This curve is a helpful goodness of fit indicator, while helping to visualize trade-offs between true positive and false positive metrics at each threshold from 0.01 to 1. A line going “over” the curve indicates a useful fit.
+The area under the curve (AUC) here is about 0.96, indicating a useful fit. A reasonable AUC is between 0.5 and 1.
 
 ```{r message=FALSE, warning=FALSE}
 ggplot(testProbs, aes(d = obs, m = pred)) + 
   geom_roc(n.cuts = 50, labels = FALSE) + 
   style_roc(theme = theme_grey) +
-  geom_abline(slope = 1, intercept = 0, size = 1.5, color = 'grey') +   labs(title="ROC Curve") + plotTheme()
+  geom_abline(slope = 1, intercept = 0, size = 1.5, color = 'grey') + labs(title="ROC Curve", subtitle="AUC ~ 0.96") + plotTheme()
 ```
 ```{r message=FALSE, warning=FALSE}
 auc_calgary <- auc(testProbs$obs, testProbs$pred)
 print(auc_calgary)
 ```
 
-## Cross-validation
+
+## Cross-Validation
+
 ```{r message=FALSE, warning=FALSE}
 #convert inundation to factor
 calgary_fishnet_final$inundation <-as.factor(as.character(calgary_fishnet_final$inundation))
@@ -561,13 +635,14 @@ ctrl <- trainControl(method = "cv",
                      number = 100,
                      savePredictions = TRUE)
 
-cvFit_calgaryReg <- train(as.factor(inundation) ~ ., data = calgary_fishnet_final %>% 
+cvFit_inundationModel <- train(as.factor(inundation) ~ ., data = calgary_fishnet_final %>% 
                             as.data.frame() %>%
                             select(-ID_FISHNET, -geometry, -slope_max, -imperv_pixels_sum),
                           method="glm", family="binomial", trControl=ctrl)
 
-cvFit_calgaryReg
+cvFit_inundationModel
 ```
+### Accuracy and Kappa
 
 ```{r eval=FALSE, include=FALSE}
 ggplot(as.data.frame(cvFit_calgaryReg$resample), aes(Accuracy)) + 
@@ -578,9 +653,9 @@ ggplot(as.data.frame(cvFit_calgaryReg$resample), aes(Accuracy)) +
 ```
 
 ```{r message=FALSE, warning=FALSE}
-dplyr::select(cvFit_calgaryReg$resample, -Resample) %>%
+dplyr::select(cvFit_inundationModel$resample, -Resample) %>%
   gather(metric, value) %>%
-  left_join(gather(cvFit_calgaryReg$results[2:4], metric, mean)) %>%
+  left_join(gather(cvFit_inundationModel$results[2:4], metric, mean)) %>%
   ggplot(aes(value)) +
     geom_histogram(bins=35, fill = "#f7b61f") +
     facet_wrap(~metric) +
@@ -590,10 +665,11 @@ dplyr::select(cvFit_calgaryReg$resample, -Resample) %>%
          subtitle = "Across-fold mean represented as dotted lines") +plotTheme()
 ```
 
+## Mapping Calgary Predictions
 
 ```{r message=FALSE, warning=FALSE}
 allPredictions <- 
-  predict(cvFit_calgaryReg, calgary_fishnet_final, type="prob")[,2]
+  predict(cvFit_inundationModel, calgary_fishnet_final, type="prob")[,2]
   
 calgary_fishnet_final_preds <- calgary_fishnet_final %>%
   cbind(calgary_fishnet_final,allPredictions) %>%
@@ -608,168 +684,122 @@ ggplot() +
   labs(title="Predictions for Inundation in Calgary")
 
 ```
-# Denver
 
-# DENVER THINGS
-```{r create_denver_fishnet, eval=FALSE, include=FALSE}
-den_bound <- st_read("Data_Denver/county_boundary/county_boundary.shp")
+# Turning to Denver: How Does This Model Perform in Another City?
 
-den_fishnet <-
-  st_make_grid(den_bound, cellsize = .003) %>%
-  st_sf() %>%
-  mutate(uniqueID = rownames(.))
+## Bring in Denver Features
 
-ggplot() +
-  geom_sf(data=den_bound, fill="grey") +
-  geom_sf(data=den_fishnet, alpha=0.2) + mapTheme()
-```
-
-# Bring in Denver features
 ```{r, load Denver fishnet}
 # DENVER: Load Calgary fishnet generated in ArcGIS Pro - NEED IT AS A SHAPEFILE
-den_fishnet <- st_read("Data_Denver/den_fishnet.shp") %>% st_as_sf()
+den_fishnet <- st_read("Data_Denver/den_fishnet/den_fishnet.shp") %>% st_as_sf()
 
-den_fishnet$FID <-as.character(den_fishnet$FID)
+den_fishnet$ID_FISHNET <-as.character(den_fishnet$ID_FISHNET)
 
 ```
 
 ```{r, load boundary for denver}
-den_boundary <- st_read("Data_Denver/county_boundary.shp") # need full shp package
-
-den_boundary <- den_boundary %>% st_crs(den_fishnet)
+den_boundary <- st_read("Data_Denver/county_boundary/county_boundary.shp") # need full shp package
 ```
 
 ```{r, load arcgis features for denver}
-
 # Denver: Elevation mean (calculated using zonal statistics (mean)).
-de_elev <- st_read("Data_Denver/den_elev_mean.xls") %>%
+den_elev <- st_read("Data_Denver/den_elev_mean.xls") %>%
   dplyr::select(FID, MEAN) %>%
-  dplyr::rename(elevation_mean = MEAN)
+  dplyr::rename(elevation_mean = MEAN) %>%
+  dplyr::rename(ID_FISHNET = FID)
 
-calgary_elev$ID_FISHNET <-as.character(calgary_elev$ID_FISHNET)
+den_elev$ID_FISHNET <-as.character(den_elev$ID_FISHNET)
 
-calgary_elev_grid <- full_join(calgary_elev, calgary_fishnet_new) %>% st_as_sf()
-calgary_fishnet_new <- calgary_elev_grid
+den_elev_grid <- full_join(den_elev, den_fishnet) %>% st_as_sf()
+den_fishnet_new <- den_elev_grid
 
 
 ```
 
-```{r, streams and flow acc for calgary}
-# CALGARY: Stream network, generated using the ArcHydro workflow from the week4 lab in ArcGIS Pro.
-calgary_streams <- st_read("Data_Calgary/Calgary_new/for_R/Hydrology/cal_stream.shp") %>%
-  dplyr::rename(ID_stream = arcid) 
-
-calgary_streams_neardist <- st_read("Data_Calgary/Calgary_new/for_R/cal_stream_neardist.xls")  %>%
-  dplyr::select(-Rowid, -OBJECTID, -NEAR_FID) %>%
+```{r, streams and flow acc for denver}
+# DENVER: Streams - distance
+den_streams_neardist <- st_read("Data_Denver/den_dist_streams2.xls")  %>%
+  dplyr::select(-OBJECTID, -NEAR_FID) %>%
   dplyr::rename(ID_FISHNET = IN_FID) %>%
   dplyr::rename(dist_stream = NEAR_DIST)
 
-##use the generate near table in ArcGIS to calculate from fishnet to stream. I have no idea if it used the centroid, though.
 
-calgary_streams_neardist$ID_FISHNET <-as.character(calgary_streams_neardist$ID_FISHNET)
+den_streams_neardist$ID_FISHNET <-as.character(den_streams_neardist$ID_FISHNET)
 
-calgary_streamneardist_grid <- full_join(calgary_streams_neardist, calgary_fishnet_new) %>% st_as_sf()
-calgary_fishnet_new <-  calgary_streamneardist_grid
+den_streams_neardist_grid <- full_join(den_streams_neardist, den_fishnet_new) %>% st_as_sf()
+den_fishnet_new <-  den_streams_neardist_grid
+```
 
-# CALGARY: flow accumulation max per fishnet cell. Generated using zonal statistics (maximum).
-calgary_flowacc <- st_read("Data_Calgary/Calgary_new/for_R/cal_flowacc_max.xls") %>%
+
+```{r, flow acc for denver}
+# DENVER: flow accumulation max per fishnet cell. Generated using zonal statistics (maximum).
+den_flowacc <- st_read("Data_Denver/den_fac_max.xls") %>%
   dplyr::rename(flowacc_max = MAX) %>%
-  dplyr::select(-Rowid, -COUNT, -AREA, -ZONE.CODE)
+  dplyr::select(-COUNT, -AREA) %>%
+  dplyr::rename(ID_FISHNET = FID)
 
-calgary_flowacc$ID_FISHNET <-as.character(calgary_flowacc$ID_FISHNET)
+den_flowacc$ID_FISHNET <-as.character(den_flowacc$ID_FISHNET)
 
-calgary_flowacc_grid <- full_join(calgary_flowacc, calgary_fishnet_new) %>%st_as_sf()
-calgary_fishnet_new <- calgary_flowacc_grid 
+den_flowacc_grid <- full_join(den_flowacc, den_fishnet_new) %>%st_as_sf()
+den_fishnet_new <- den_flowacc_grid 
 ```
 
-```{r, map streams for calgary just to see what's up}
-#visualize streams
-ggplot() +
-  geom_sf(data=calgary_boundary, fill="grey") +
-  #geom_sf(data=calgary_fishnet, alpha=0.2) + 
-  geom_sf(data=calgary_streams, color="blue") +mapTheme()
-```
-
-```{r, parks distance load from arcgis}
+```{r, parks distance load from arcgis denver}
 # CALGARY: Parks distance - from open data calgary. Used arcgis pro to create a near distance table.
 
-calgary_parks_neardist <- st_read("Data_Calgary/Calgary_new/for_R/cal_parksfeat_near.xls")  %>%
-  dplyr::select(-Rowid, -OBJECTID, -NEAR_FID) %>%
+den_parks_neardist <- st_read("Data_Denver/den_dist_parks2.xls")  %>%
+  dplyr::select(-OBJECTID, -NEAR_FID) %>%
   dplyr::rename(ID_FISHNET = IN_FID) %>%
   dplyr::rename(dist_parks = NEAR_DIST)
 
-calgary_parks_neardist$ID_FISHNET <-as.character(calgary_parks_neardist$ID_FISHNET)
+den_parks_neardist$ID_FISHNET <-as.character(den_parks_neardist$ID_FISHNET)
 
-calgary_parks_neardist_grid <- full_join(calgary_parks_neardist, calgary_fishnet_new) %>% st_as_sf()
-calgary_fishnet_new <-  calgary_parks_neardist_grid
+den_parks_neardist_grid <- full_join(den_parks_neardist, den_fishnet_new) %>% st_as_sf()
+den_fishnet_new <-  den_parks_neardist_grid
 ```
-```{r, import shapefile of hydrology features}
+
+```{r, import shapefile of hydrology features denver}
 #shapefile import
-calgary_hydro <- st_read("Data_Calgary/Calgary_new/for_R/Hydrology/hydrology_features.shp") %>%
-  st_transform(st_crs(calgary_fishnet_new))
-
-#visualize hydrology features - more extensive than what the stream network from ArcGIS provided
-ggplot() +
-  geom_sf(data=calgary_boundary, fill="grey") +
-  #geom_sf(data=calgary_fishnet, alpha=0.2) + 
-  geom_sf(data=calgary_hydro, color="blue") +mapTheme()
+den_hydro <- st_read("Data_Denver/den_water/den_water.shp") %>%
+  st_transform(st_crs(den_fishnet_new)) %>% st_as_sf()
 
 ```
-```{r, number of hydrology feature intersections per fishnet cell}
-calgary_fishnet_new <- calgary_fishnet_new %>% mutate(n_hydro_int = lengths(st_intersects(calgary_fishnet_new, calgary_hydro)))
+
+```{r, number of hydrology feature intersections per fishnet cell denver}
+den_fishnet_new <- den_fishnet_new %>% mutate(n_hydro_int = lengths(st_intersects(den_fishnet_new, den_hydro)))
 ```
 
-```{r, slope max and distance to steep slopes for calgary}
-# CALGARY: Slope max per fishnet cell. Generated using zonal statistics (max).
-calgary_slope <- st_read("Data_Calgary/Calgary_new/for_R/cal_slope_max.xls") %>%
-  dplyr::rename(slope_max = MAX) %>%
-  dplyr::select(-Rowid, -COUNT, -AREA, -ZONE.CODE)
-
-calgary_slope$ID_FISHNET <-as.character(calgary_slope$ID_FISHNET)
-
-calgary_slope_grid <- full_join(calgary_slope, calgary_fishnet_new) %>% st_as_sf()
-calgary_fishnet_new <- calgary_slope_grid
-
-# CALGARY: Distance to steep slopes per fishnet cell. Generated using near table, near distance.
-calgary_steepslope_dist <- st_read("Data_Calgary/Calgary_new/for_R/cal_steepslope_dist.xls")  %>%
-  dplyr::select(-Rowid, -OBJECTID, -NEAR_FID) %>%
+```{r, slope max and distance to steep slopes for denver}
+# DENVER: Distance to steep slopes per fishnet cell. Generated using near table, near distance.
+den_steepslope_dist <- st_read("Data_Denver/den_dist_slope2.xls")  %>%
+  dplyr::select(-OBJECTID, -NEAR_FID) %>%
   dplyr::rename(ID_FISHNET = IN_FID) %>%
   dplyr::rename(steepslope_dist = NEAR_DIST)
 
-calgary_steepslope_dist$ID_FISHNET <-as.character(calgary_steepslope_dist$ID_FISHNET)
+den_steepslope_dist$ID_FISHNET <-as.character(den_steepslope_dist$ID_FISHNET)
 
-calgary_steepslope_dist_grid <- full_join(calgary_steepslope_dist, calgary_fishnet_new) %>%st_as_sf()
-calgary_fishnet_new <- calgary_steepslope_dist_grid 
-
-```
-
-```{r, impervious land cover sum  for calgary}
-# CALGARY: majority land cover type per fishnet cell. Reclassified the data by land cover category 1-17, converted it to a raster, and used zonal statistics (majority).
-
-calgary_impervious_sum <- st_read("Data_Calgary/Calgary_new/for_R/cal_lcimp_sumt.xls") %>%
-  dplyr::rename(imperv_pixels_sum = SUM) %>%
-  dplyr::select(-Rowid, -COUNT, -AREA, -ZONE.CODE)
-
-calgary_impervious_sum$ID_FISHNET <-as.character(calgary_impervious_sum$ID_FISHNET)
-
-calgary_impervious_sum_grid <- full_join(calgary_impervious_sum, calgary_fishnet_new) %>% st_as_sf()
-
-calgary_impervious_sum_grid[is.na(calgary_impervious_sum_grid)] = 0
-
-calgary_fishnet_new <- calgary_impervious_sum_grid
+den_steepslope_dist_grid <- full_join(den_steepslope_dist, den_fishnet_new) %>%st_as_sf()
+den_fishnet_new <- den_steepslope_dist_grid 
 
 ```
 
-Talk about trimming the fishnet down by doing a select-by-centroids approach.
-```{r, select fishnet cells by centroid}
-# Centroid-in-polygon join to see which cells have their centroid in the calgary boundary
-calgary_selectCentroids <-
-  st_centroid(calgary_fishnet_new)[calgary_boundary,] %>%
+
+```{r, select fishnet cells by centroid for denver}
+# Centroid-in-polygon join to see which cells have their centroid in the denver boundary
+den_selectCentroids <-
+  st_centroid(den_fishnet_new)[den_boundary,] %>%
   st_drop_geometry() %>%
-  left_join(dplyr::select(calgary_fishnet_new, ID_FISHNET)) %>%
+  left_join(dplyr::select(den_fishnet_new, ID_FISHNET)) %>%
   st_sf()
 
-calgary_fishnet_final <- calgary_selectCentroids
+den_fishnet_final <- den_selectCentroids
 
 ```
+
+
+```{r}
+#inundationModel <- glm(inundation ~ ., family="binomial"(link="logit"),
+#                  data=(calgaryTrain) %>% as.data.frame() %>% dplyr::select(-ID_FISHNET, -geometry))
+
 ```
+
