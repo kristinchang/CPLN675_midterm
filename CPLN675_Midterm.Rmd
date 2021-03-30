@@ -58,6 +58,7 @@ library(FNN)
 library(scales)
 library(jtools)
 library(viridis)
+library(webex)
 
 
 # load themes and palettes
@@ -627,10 +628,6 @@ print(auc_calgary)
 #convert inundation to factor
 calgary_fishnet_final$inundation <-as.factor(as.character(calgary_fishnet_final$inundation))
 
-
-```
-
-```{r message=FALSE, warning=FALSE}
 ctrl <- trainControl(method = "cv", 
                      number = 100,
                      savePredictions = TRUE)
@@ -642,10 +639,11 @@ cvFit_inundationModel <- train(as.factor(inundation) ~ ., data = calgary_fishnet
 
 cvFit_inundationModel
 ```
+
 ### Accuracy and Kappa
 
 ```{r eval=FALSE, include=FALSE}
-ggplot(as.data.frame(cvFit_calgaryReg$resample), aes(Accuracy)) + 
+ggplot(as.data.frame(cvFit_inundationModel$resample), aes(Accuracy)) + 
   geom_histogram() +
   scale_x_continuous(limits = c(0, 1)) +
   labs(x="Accuracy",
@@ -657,7 +655,7 @@ dplyr::select(cvFit_inundationModel$resample, -Resample) %>%
   gather(metric, value) %>%
   left_join(gather(cvFit_inundationModel$results[2:4], metric, mean)) %>%
   ggplot(aes(value)) +
-    geom_histogram(bins=35, fill = "#f7b61f") +
+    geom_histogram(bins=35, fill = "navy") +
     facet_wrap(~metric) +
     geom_vline(aes(xintercept = mean), colour = "red", linetype = 3, size = 1.5) +
     scale_x_continuous(limits = c(0, 1)) +
@@ -690,16 +688,15 @@ ggplot() +
 ## Bring in Denver Features
 
 ```{r, load Denver fishnet}
+den_boundary <- st_read("Data_Denver/county_boundary/county_boundary.shp") # need full shp package
+
 # DENVER: Load Calgary fishnet generated in ArcGIS Pro - NEED IT AS A SHAPEFILE
-den_fishnet <- st_read("Data_Denver/den_fishnet/den_fishnet.shp") %>% st_as_sf()
+den_fishnet <- st_read("Data_Denver/den_fishnet/den_fishnet.shp") %>% st_as_sf() %>% st_transform(st_crs(den_boundary))
 
 den_fishnet$ID_FISHNET <-as.character(den_fishnet$ID_FISHNET)
-
 ```
 
-```{r, load boundary for denver}
-den_boundary <- st_read("Data_Denver/county_boundary/county_boundary.shp") # need full shp package
-```
+
 
 ```{r, load arcgis features for denver}
 # Denver: Elevation mean (calculated using zonal statistics (mean)).
@@ -745,7 +742,7 @@ den_fishnet_new <- den_flowacc_grid
 ```
 
 ```{r, parks distance load from arcgis denver}
-# CALGARY: Parks distance - from open data calgary. Used arcgis pro to create a near distance table.
+# den: Parks distance - from open data calgary. Used arcgis pro to create a near distance table.
 
 den_parks_neardist <- st_read("Data_Denver/den_dist_parks2.xls")  %>%
   dplyr::select(-OBJECTID, -NEAR_FID) %>%
@@ -783,23 +780,30 @@ den_fishnet_new <- den_steepslope_dist_grid
 
 ```
 
+```{r}
+den_fishnet_new <- den_fishnet_new %>%
+    dplyr::select(-Id, -OBJECTID) 
+#%>% add_column(inundation = 0) # tried this to see if having a column of zeros would help, but I don't think it knows that it is supposed to predict prob of that. so try running without this first
 
-```{r, select fishnet cells by centroid for denver}
-# Centroid-in-polygon join to see which cells have their centroid in the denver boundary
-den_selectCentroids <-
-  st_centroid(den_fishnet_new)[den_boundary,] %>%
-  st_drop_geometry() %>%
-  left_join(dplyr::select(den_fishnet_new, ID_FISHNET)) %>%
-  st_sf()
-
-den_fishnet_final <- den_selectCentroids
 
 ```
-
 
 ```{r}
-#inundationModel <- glm(inundation ~ ., family="binomial"(link="logit"),
-#                  data=(calgaryTrain) %>% as.data.frame() %>% dplyr::select(-ID_FISHNET, -geometry))
+allPredictions_den <- 
+  predict(inundationModel, den_fishnet_new, type="prob") %>% as.data.frame()
+
+den_fishnet_final_preds <- den_fishnet_new %>%
+  cbind(den_fishnet_new, allPredictions_den) %>%
+  mutate(allPredictions_den = round(allPredictions_den * 100)) 
+```
+
+```{r message=FALSE, warning=FALSE}
+ggplot() + 
+    geom_sf(data=den_fishnet_final_preds, aes(fill=(allPredictions_den)), colour=NA) +
+  scale_fill_viridis(name = "Probability")+
+  mapTheme() +
+  labs(title="Predictions for Inundation in Denver")
 
 ```
+
 
