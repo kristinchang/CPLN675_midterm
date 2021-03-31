@@ -21,9 +21,10 @@ According to the World Health Organization, floods are the most frequent natural
 
 City planners have the utmost responsibility to ensure their cities are prepared to respond to such natural disasters and minimize harm to their most vulnerable communities. The following document outlines a machine learning algorithm that predicts which areas of a city are at the highest risk of flooding disasters. An Emergency Management team can use the resulting model of this algorithm to inform their preparedness tactics to minimize damage and respond to future flooding disasters more efficiently. Ultimately, the algorithm is a helpful tool for individuals in Public Works, Public Health, City Planning, and Community-Based Organizations to proactively plan for resilience. 
 
-The model is created using past flood data from the City of Calgary in Canada to measure accuracy and then is applied to the City of Denver in the United States to measure generalizability. This document explains each step of the process such that City Planning departments can input their city’s data and accurately interpret the resulting model. We also wanted to provide transparency into the feature engineering steps of the process, which is why the procedures in ArcGIS and R are described in detail.
+The model is created using past flood data from the City of **Calgary** in Canada to measure accuracy and then is applied to the City of **Denver** in the United States to measure generalizability. This document explains each step of the process such that City Planning departments can input their city’s data and accurately interpret the resulting model. We also wanted to provide transparency into the feature engineering steps of the process, which is why the procedures in ArcGIS and R are described in detail.
 
-**For audiences who would like the main takeaways, we invite you to view [this three-page summary document.](https://github.com/jennaepstein/jennaepstein.github.io/blob/main/pdf/LUEPmidterm_summary_ChangEpstein.pdf)**
+For audiences who would like the main takeaways, we invite you to view [this three-page summary document.](https://github.com/kristinchang/CPLN675_midterm/blob/main/LUEPmidterm_summary_ChangEpstein.pdf)
+
 
 # Setup
 The algorithm was created using ArcGIS Pro and R. First, the necessary R libraries are loaded and themes are defined for the maps and plots that will be displayed later in the process.
