@@ -36,7 +36,7 @@ This document explains each step of the algorithmic process such that City Plann
 ```
 
 ```{r fireprobcell, echo=FALSE, out.width="60%", fig.show='hold', fig.align='center'}
-knitr::include_graphics("C:/Users/jenna/Documents/GitHub/CPLN675_midterm/cal_inundation_intromap.png")
+knitr::include_graphics("C:/Users/jenna/Documents/GitHub/CPLN675_midterm/calgary_inundation_intromap.png")
 ```
 
 # Setup
@@ -58,7 +58,7 @@ library(FNN)
 library(scales)
 library(jtools)
 library(viridis)
-library(webex)
+library(gridExtra)
 
 
 # load themes and palettes
@@ -255,10 +255,10 @@ calgary_fishnet_final <- calgary_selectCentroids
 ```{r calgary inundation by way of fishnet, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE, results='hide'}
 ggplot() + 
   geom_sf(data=calgary_fishnet_final, aes(fill=as.factor(inundation)), color=NA) +
-  scale_fill_manual(values = c("navy", "darkgreen"),
-                    labels = c("yes","no"),
-                    name = "Inundation: \nDid Flooding Occur?") +
-  labs(title="Inundation in Calgary", subtitle = "Extent derived from raster from June 2013 flooding") +
+  scale_fill_manual(values = c("darkgreen", "navy"),
+                    labels = c("no","yes"),
+                    name = "Did Flooding Occur?") +
+  labs(title="Inundation in Calgary", subtitle = "Extent derived from raster from June 2013 flooding") + theme(legend.position = "bottom") +
  # geom_sf(data=calgary_boundary, color="black", fill=NA)+
   mapTheme()
 
@@ -279,7 +279,7 @@ calgary_fishnet_final$dist_parks <-as.numeric(as.character(calgary_fishnet_final
 calgary_fishnet_final$steepslope_dist <-as.numeric(as.character(calgary_fishnet_final$steepslope_dist))
 ```
 
-## Features Included in Model
+## Significant Features
 
 ### Mean Elevation
 Elevation generally describes the topography of the land. Areas at lower levels of elevation are at higher risk for floods than areas at higher elevations. We explored calculating the lowest degree of elevation per fishnet grid cell in Calgary, but found that using the mean helped the performance of our model. Mean elevation is stored in the **`elevation_mean`** feature variable, measured in meters.
@@ -287,10 +287,10 @@ Elevation generally describes the topography of the land. Areas at lower levels 
 To calculate our **`elevation_mean`** feature variable, a Digital Elevation Model (DEM) was loaded into ArcGIS Pro. **Zonal Statistics** were used to calculate the mean per fishnet grid cell.
 
 ```{r message=FALSE, warning=FALSE, results='hide'}
-ggplot() +
+map.elevation <- ggplot() +
   geom_sf(data = calgary_fishnet_final, aes(fill = elevation_mean), color=NA) +
   scale_fill_viridis()+
-  labs(title = "Elevation (mean)", fill="Elevation Mean \n(meters)") + mapTheme()
+  labs(title = "Elevation (Mean)", fill="Elevation \n(meters)") + mapTheme()
 
 ```
 
@@ -302,13 +302,13 @@ The hydrology tools in ArcGIS Pro are used to turn the Calgary DEM into a stream
 
 ```{r cal streams map, message=FALSE, warning=FALSE, results='hide'}
 #visualize streams
-ggplot() +
+map.streams <- ggplot() +
   geom_sf(data=calgary_boundary, fill="grey") +
   #geom_sf(data=calgary_fishnet, alpha=0.2) + 
   geom_sf(data=calgary_streams, color="blue") + labs(title="Stream Network in Calgary") + mapTheme()
 
 #distance to streams
-ggplot() +
+map.diststreams <- ggplot() +
   geom_sf(data = calgary_fishnet_final, aes(fill = dist_stream), color=NA) +
   scale_fill_viridis()+
   labs(title = "Distance to Streams", fill="Distance \n(meters)") + mapTheme()
@@ -318,40 +318,51 @@ ggplot() +
 Flooding occurs when water levels exceed the stream channel. Based on the direction of the streams calculated above, **Flow Accumulation** tool is used to calculate the accumulated weight of all pixels flowing into each downslope pixel in the raster. **Zonal Statistics** (maximum) is used to calculate the maximum flow accumulation per each fishnet grid cell. Using the maximum value allows us to evaluate at the highest risk level. In other words, the resulting model will present a “worst-case-scenario” picture enabling planners to be over-prepared rather than under-prepared. This feature variable is called **`flow_maxacc`**. 
 
 ```{r message=FALSE, warning=FALSE, results='hide'}
-ggplot() +
+map.flowaccmax <- ggplot() +
   geom_sf(data = calgary_fishnet_final, aes(fill = flowacc_max), color=NA) +
-  scale_fill_viridis()+
-  labs(title = "Flow Accumulation, Maximum", fill="Max. Acc") + mapTheme()
+  scale_fill_viridis(breaks = c(400000, 800000, 1200000), labels = c("400K", "800K", "1200K"))+
+  labs(title = "Flow Accumulation (Max)", fill="Pixels \n") + mapTheme()
 
 ```
 
 ### Distance to Steep Slopes
 Text
 ```{r message=FALSE, warning=FALSE, results='hide'}
-ggplot() +
+map.steepslopedist <- ggplot() +
   geom_sf(data = calgary_fishnet_final, aes(fill = steepslope_dist), color=NA) +
   scale_fill_viridis()+
-  labs(title = "Distance to Steep Slopes", fill="Distance \n(meters)", subtitle = "Steep slopes defined as at least 10 degrees") + mapTheme()
+  labs(title = "Distance to Steep Slopes", fill="Distance \n(meters)") + mapTheme()
 ```
 
 ### Distance to Parks
-Text
+Land cover or soil type can be indicative of areas prone to flooding. The more permeable the surface is, the more risky it is for floods. Initially, land cover data for Calgary was used to identify which fishnet grid cells were impervious based on their land cover type; however, this did not help the model perform well. Instead, distance to parks is incorporated into the model. Parks are generally covered in grass which is fairly permeable. Thus, the closer a fishnet grid cell is to a park, the more likely it is to become inundated. 
+
+After bringing in the complete parks dataset in Calgary from the city's open data portal, the **Near** tool in ArcGIS is used to perform this calculation for the **`distance to parks~** feature variable. 
 ```{r message=FALSE, warning=FALSE, results='hide'}
 #distance to parks
-ggplot() +
+map.distparks <- ggplot() +
   geom_sf(data = calgary_fishnet_final, aes(fill = dist_parks), color=NA) +
   scale_fill_viridis()+
   labs(title = "Distance to Parks", fill="Distance \n(meters)") + mapTheme()
 ```
 
 ### Number of Hydrological Intersections
-Text
+_Why it was chosen as a feature to explore (esp why this is needed in addition to mere distance to stream ー frequency of intersections with features could indicate damper soils, etc)_
+* To calculate the number of intersections with existing hydrological features per fishnet grid cell, the lengths(st_intersects) functionality in R is used to create a count feature variable, **`n_hydro_int`**.
+
 ```{r message=FALSE, warning=FALSE, results='hide'}
 #number of hydrology feature intersections
-ggplot() +
+map.hydroints <- ggplot() +
   geom_sf(data = calgary_fishnet_final, aes(fill = n_hydro_int), color=NA) +
   scale_fill_viridis()+
-  labs(title = "Hydrology Intersections", fill="Number") + mapTheme()
+  labs(title = "Hydrology Intersections", fill="Number \n") + mapTheme()
+```
+
+```{r, message=FALSE, warning=FALSE}
+
+grid.arrange(map.elevation, map.diststreams, map.flowaccmax, map.steepslopedist, map.distparks, map.hydroints,
+             ncol=2,
+             top = "Selected Significant Features included in Model")
 ```
 
 
@@ -680,25 +691,30 @@ ggplot() +
   scale_fill_viridis(name = "Probability")+
   mapTheme() +
   labs(title="Predictions for Inundation in Calgary")
+```
 
+
+```{r message=FALSE, warning=FALSE}
+ggplot() + 
+    geom_sf(data=calgary_fishnet_final_preds, aes(fill=(allPredictions)), colour=NA) +
+     scale_fill_viridis(name = "Probability")+
+  geom_sf(data = calgary_fishnet_final_preds %>%
+          filter(inundation=="1"),
+          aes(), color="transparent", fill="red", alpha=0.5)+
+  mapTheme() +
+  labs(title="Predictions for Inundation in Calgary", subtitle = "2013 flood extent in red overlay")
 ```
 
 # Turning to Denver: How Does This Model Perform in Another City?
 
-## Bring in Denver Features
-
-```{r, load Denver fishnet}
+```{r Denver feature loading and engineering, message=FALSE, warning=FALSE, results='hide'}
 den_boundary <- st_read("Data_Denver/county_boundary/county_boundary.shp") # need full shp package
 
 # DENVER: Load Calgary fishnet generated in ArcGIS Pro - NEED IT AS A SHAPEFILE
 den_fishnet <- st_read("Data_Denver/den_fishnet/den_fishnet.shp") %>% st_as_sf() %>% st_transform(st_crs(den_boundary))
 
 den_fishnet$ID_FISHNET <-as.character(den_fishnet$ID_FISHNET)
-```
 
-
-
-```{r, load arcgis features for denver}
 # Denver: Elevation mean (calculated using zonal statistics (mean)).
 den_elev <- st_read("Data_Denver/den_elev_mean.xls") %>%
   dplyr::select(FID, MEAN) %>%
@@ -710,25 +726,16 @@ den_elev$ID_FISHNET <-as.character(den_elev$ID_FISHNET)
 den_elev_grid <- full_join(den_elev, den_fishnet) %>% st_as_sf()
 den_fishnet_new <- den_elev_grid
 
-
-```
-
-```{r, streams and flow acc for denver}
 # DENVER: Streams - distance
 den_streams_neardist <- st_read("Data_Denver/den_dist_streams2.xls")  %>%
   dplyr::select(-OBJECTID, -NEAR_FID) %>%
   dplyr::rename(ID_FISHNET = IN_FID) %>%
   dplyr::rename(dist_stream = NEAR_DIST)
 
-
 den_streams_neardist$ID_FISHNET <-as.character(den_streams_neardist$ID_FISHNET)
-
 den_streams_neardist_grid <- full_join(den_streams_neardist, den_fishnet_new) %>% st_as_sf()
 den_fishnet_new <-  den_streams_neardist_grid
-```
 
-
-```{r, flow acc for denver}
 # DENVER: flow accumulation max per fishnet cell. Generated using zonal statistics (maximum).
 den_flowacc <- st_read("Data_Denver/den_fac_max.xls") %>%
   dplyr::rename(flowacc_max = MAX) %>%
@@ -736,37 +743,26 @@ den_flowacc <- st_read("Data_Denver/den_fac_max.xls") %>%
   dplyr::rename(ID_FISHNET = FID)
 
 den_flowacc$ID_FISHNET <-as.character(den_flowacc$ID_FISHNET)
-
 den_flowacc_grid <- full_join(den_flowacc, den_fishnet_new) %>%st_as_sf()
 den_fishnet_new <- den_flowacc_grid 
-```
 
-```{r, parks distance load from arcgis denver}
-# den: Parks distance - from open data calgary. Used arcgis pro to create a near distance table.
-
+# DENVER: Parks distance - from open data calgary. Used arcgis pro to create a near distance table.
 den_parks_neardist <- st_read("Data_Denver/den_dist_parks2.xls")  %>%
   dplyr::select(-OBJECTID, -NEAR_FID) %>%
   dplyr::rename(ID_FISHNET = IN_FID) %>%
   dplyr::rename(dist_parks = NEAR_DIST)
 
 den_parks_neardist$ID_FISHNET <-as.character(den_parks_neardist$ID_FISHNET)
-
 den_parks_neardist_grid <- full_join(den_parks_neardist, den_fishnet_new) %>% st_as_sf()
 den_fishnet_new <-  den_parks_neardist_grid
-```
 
-```{r, import shapefile of hydrology features denver}
-#shapefile import
+# DENVER:  hydro shapefile import
 den_hydro <- st_read("Data_Denver/den_water/den_water.shp") %>%
   st_transform(st_crs(den_fishnet_new)) %>% st_as_sf()
 
-```
-
-```{r, number of hydrology feature intersections per fishnet cell denver}
+# DENVER: hydro features intersections
 den_fishnet_new <- den_fishnet_new %>% mutate(n_hydro_int = lengths(st_intersects(den_fishnet_new, den_hydro)))
-```
 
-```{r, slope max and distance to steep slopes for denver}
 # DENVER: Distance to steep slopes per fishnet cell. Generated using near table, near distance.
 den_steepslope_dist <- st_read("Data_Denver/den_dist_slope2.xls")  %>%
   dplyr::select(-OBJECTID, -NEAR_FID) %>%
@@ -774,30 +770,36 @@ den_steepslope_dist <- st_read("Data_Denver/den_dist_slope2.xls")  %>%
   dplyr::rename(steepslope_dist = NEAR_DIST)
 
 den_steepslope_dist$ID_FISHNET <-as.character(den_steepslope_dist$ID_FISHNET)
-
 den_steepslope_dist_grid <- full_join(den_steepslope_dist, den_fishnet_new) %>%st_as_sf()
 den_fishnet_new <- den_steepslope_dist_grid 
 
-```
-
-```{r}
+# Remove unnecessary columns
 den_fishnet_new <- den_fishnet_new %>%
     dplyr::select(-Id, -OBJECTID) 
-#%>% add_column(inundation = 0) # tried this to see if having a column of zeros would help, but I don't think it knows that it is supposed to predict prob of that. so try running without this first
-
 
 ```
 
-```{r}
+```{r denver select by centroids, message=FALSE, warning=FALSE, results='hide'}
+den_selectCentroids <-
+  st_centroid(den_fishnet_new)[den_boundary,] %>%
+  st_drop_geometry() %>%
+  left_join(dplyr::select(den_fishnet_new, ID_FISHNET)) %>%
+  st_sf()
+
+den_fishnet_final <- den_selectCentroids
+```
+
+```{r Denver predict, message=FALSE, warning=FALSE, results='hide'}
 allPredictions_den <- 
-  predict(inundationModel, den_fishnet_new, type="prob") %>% as.data.frame()
+  predict(inundationModel, den_fishnet_final, type="response")
 
-den_fishnet_final_preds <- den_fishnet_new %>%
-  cbind(den_fishnet_new, allPredictions_den) %>%
-  mutate(allPredictions_den = round(allPredictions_den * 100)) 
+
+den_fishnet_final_preds <- den_fishnet_final %>%
+  cbind(den_fishnet_final, allPredictions_den) %>%
+  mutate(allPredictions_den = round(allPredictions_den*100)) %>% st_as_sf()
 ```
 
-```{r message=FALSE, warning=FALSE}
+```{r denver predictions map, message=FALSE, warning=FALSE}
 ggplot() + 
     geom_sf(data=den_fishnet_final_preds, aes(fill=(allPredictions_den)), colour=NA) +
   scale_fill_viridis(name = "Probability")+
