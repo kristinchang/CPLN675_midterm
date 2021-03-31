@@ -830,6 +830,10 @@ ggplot() +
   labs(title="Predictions for Inundation in Denver")
 
 ```
+
 # Conclusion
 The results of this model are crucial to informing planners and allowing a city to be prepared for flood disasters. Successfully leveraging the knowledge and insight gained can save lives, cities, homes, and money. There are many implementation challenges when it comes to appropriately executing emergency preparedness programs such as funding, political and community support, and collaboration across departments. However, we are confident that the story being told through these data visualizations can be an effective tool in convincing relevant decision-makers.
+
+
+
 
