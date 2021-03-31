@@ -1,6 +1,6 @@
 ---
-title: "CPLN675_midterm"
-author: "Jenna Epstein and Kristin Chang"
+title: "Forecasting Flood Inundation"
+author: "Kristin Chang & Jenna Epstein"
 date: "March 31, 2021"
 output:
   html_document:
@@ -16,28 +16,14 @@ knitr::opts_chunk$set(echo = TRUE)
 options(scipen = 999)
 ```
 
-# Introduction
+# Motivation
 According to the World Health Organization, floods are the most frequent natural disaster affecting countries across the globe. Floods have the potential to leave communities devastated not only because of the direct loss of life due to drowning and infrastructure damage, but also because of indirect impacts such as increased transmission of disease, higher risk of injury and hypothermia, disrupted or disabled infrastructure systems, and increased likelihood of causing other natural disasters. In the past ten years, climate change has exacerbated the effects of natural disasters like flooding, drought, sea level rise, and extreme precipitation and their frequency and intensity are expected to continue to rise if left unchecked.
 
-City Planners have the utmost responsibility to ensure their cities are prepared to respond to such natural disasters and minimize harm to their most vulnerable communities. The following document outlines a machine learning algorithm that predicts which areas of a city are at the highest risk of flooding disasters. An Emergency Management team can use the resulting model of this algorithm to inform their preparedness tactics to minimize damage and respond to future flooding disasters more efficiently. Ultimately, the algorithm is a helpful tool for individuals in Public Works, Public Health, City Planning, and Community-Based Organizations to proactively plan for resilience. 
+City planners have the utmost responsibility to ensure their cities are prepared to respond to such natural disasters and minimize harm to their most vulnerable communities. The following document outlines a machine learning algorithm that predicts which areas of a city are at the highest risk of flooding disasters. An Emergency Management team can use the resulting model of this algorithm to inform their preparedness tactics to minimize damage and respond to future flooding disasters more efficiently. Ultimately, the algorithm is a helpful tool for individuals in Public Works, Public Health, City Planning, and Community-Based Organizations to proactively plan for resilience. 
 
-This document explains each step of the algorithmic process such that City Planning departments can input their city’s data and accurately interpret the resulting model. The model is created using past flood data from the City of Calgary in Canada to measure accuracy and then is applied to the City of Denver in the United States to measure generalizability. 
-```{r}
-#code used to generate introductory map, for reference.
-#ggplot() + 
-#  geom_sf(data=calgary_fishnet_final, aes(fill=as.factor(inundation)), color=NA) +
-#  scale_fill_manual(values = c("navy", "darkgreen"),
-#                    labels = c("yes","no"),
-#                    name = "Inundation: \nDid Flooding Occur?") +
-#  labs(title="Inundation in Calgary", subtitle = "Extent derived from raster from June 2013 flooding") +
-# # geom_sf(data=calgary_boundary, color="black", fill=NA)+
-#  mapTheme()
+The model is created using past flood data from the City of Calgary in Canada to measure accuracy and then is applied to the City of Denver in the United States to measure generalizability. This document explains each step of the process such that City Planning departments can input their city’s data and accurately interpret the resulting model. We also wanted to provide transparency into the feature engineering steps of the process, which is why the procedures in ArcGIS and R are described in detail.
 
-```
-
-```{r fireprobcell, echo=FALSE, out.width="60%", fig.show='hold', fig.align='center'}
-knitr::include_graphics("C:/Users/jenna/Documents/GitHub/CPLN675_midterm/calgary_inundation_intromap.png")
-```
+**For audiences who would like the main takeaways, we invite you to view [this three-page summary document.](https://github.com/jennaepstein/jennaepstein.github.io/blob/main/pdf/LUEPmidterm_summary_ChangEpstein.pdf)**
 
 # Setup
 The algorithm was created using ArcGIS Pro and R. First, the necessary R libraries are loaded and themes are defined for the maps and plots that will be displayed later in the process.
@@ -109,6 +95,23 @@ plotTheme <- function(base_size = 12) {
 The fishnet was generated in ArcGIS Pro using the **Create Fishnet** tool in order to generate a grid of the appropriate extent with 200 meter by 200 meter cells as the unit of measurement. This cell size was determined using the overall extent of the city boundary and the size of the resulting dataset. Cell size will vary depending on the city of focus and the computing power of the machine being used. 
 
 The inundation raster data was also generated in ArcGIS Pro using the **Reclassify** tool to indicate pixels within the flooding extent and pixels outside of the flooding extent. Inundated pixels are assigned a value of 1 and not inundated pixels are assigned a value of 0. **Zonal Statistics** were then used to calculate the maximum level of flooding per fishnet grid cell in order to visualize and identify which grid cells are at the highest risk of flooding. 
+
+```{r eval=FALSE, include=FALSE}
+#code used to generate introductory map, for reference.
+#ggplot() + 
+#  geom_sf(data=calgary_fishnet_final, aes(fill=as.factor(inundation)), color=NA) +
+#  scale_fill_manual(values = c("navy", "darkgreen"),
+#                    labels = c("yes","no"),
+#                    name = "Inundation: \nDid Flooding Occur?") +
+#  labs(title="Inundation in Calgary", subtitle = "Extent derived from raster from June 2013 flooding") +
+# # geom_sf(data=calgary_boundary, color="black", fill=NA)+
+#  mapTheme()
+
+```
+
+```{r probcell, echo=FALSE, out.width="60%", fig.show='hold', fig.align='center'}
+knitr::include_graphics("C:/Users/jenna/Documents/GitHub/CPLN675_midterm/calgary_inundation_intromap.png")
+```
 
 ```{r initial fishnet and boundary, message=FALSE, warning=FALSE, results='hide'}
 # CALGARY: Load Calgary fishnet generated in ArcGIS Pro (200x200m cells).
@@ -287,7 +290,7 @@ To calculate our **`elevation_mean`** feature variable, a Digital Elevation Mode
 map.elevation <- ggplot() +
   geom_sf(data = calgary_fishnet_final, aes(fill = elevation_mean), color=NA) +
   scale_fill_viridis()+
-  labs(title = "Elevation (Mean)", fill="Elevation \n(meters)") + mapTheme()
+  labs(title = "Elevation \n(Mean)", fill="Elevation \n(meters)") + mapTheme()
 
 ```
 
@@ -308,7 +311,7 @@ map.streams <- ggplot() +
 map.diststreams <- ggplot() +
   geom_sf(data = calgary_fishnet_final, aes(fill = dist_stream), color=NA) +
   scale_fill_viridis()+
-  labs(title = "Distance to Streams", fill="Distance \n(meters)") + mapTheme()
+  labs(title = "Distance to Nearest \nStream", fill="Distance \n(meters)") + mapTheme()
 ```
 
 ### Maximum Flow Accumulation
@@ -318,11 +321,11 @@ Flooding occurs when water levels exceed the stream channel. Based on the direct
 map.flowaccmax <- ggplot() +
   geom_sf(data = calgary_fishnet_final, aes(fill = flowacc_max), color=NA) +
   scale_fill_viridis(breaks = c(400000, 800000, 1200000), labels = c("400K", "800K", "1200K"))+
-  labs(title = "Flow Accumulation (Max)", fill="Pixels \n") + mapTheme()
+  labs(title = "Flow Accumulation \n(Maximum)", fill="Pixels \n") + mapTheme()
 
 ```
 
-### Distance to Steep Slopes
+### Distance to Nearest Steep Slope
 Steep slopes in the land can contribute to both flow direction and flow accumulation. Additionally, a steeper slope likely accelerates the speed of flow and can intensify in the case of a flood. Thus, it is important to be aware of the location of steep slopes in the topography and their relative distance to past floods. 
 
 Slopes can be calculated using the **Slope** tool in ArcGIS. To distinguish which slopes are steep, **Reclassify** is used to assign slopes greater than or equal to 10 a value of 1 and all other slopes a value of NODATA. These steep slopes are converted from raster data to polygon features using the **Raster to Polygon** tool. Then, **Near** can be used once again to calculate the distance of each fishnet grid cell to a steep slope. this is imported into R as the **`dist_steepslope`** feature variable.
@@ -331,10 +334,10 @@ Slopes can be calculated using the **Slope** tool in ArcGIS. To distinguish whic
 map.steepslopedist <- ggplot() +
   geom_sf(data = calgary_fishnet_final, aes(fill = steepslope_dist), color=NA) +
   scale_fill_viridis()+
-  labs(title = "Distance to Steep Slopes", fill="Distance \n(meters)") + mapTheme()
+  labs(title = "Distance to \nNearest Steep Slope", fill="Distance \n(meters)") + mapTheme()
 ```
 
-### Distance to Parks
+### Distance to Nearest Park
 Land cover or soil type can be indicative of areas prone to flooding. The more permeable the surface is, the more risky it is for floods. Initially, land cover data for Calgary was used to identify which fishnet grid cells were impervious based on their land cover type; however, this did not help the model perform well. Instead, distance to parks is incorporated into the model. Parks are generally covered in grass which is fairly permeable. Thus, the closer a fishnet grid cell is to a park, the more likely it is to become inundated. 
 
 After bringing in the complete parks dataset in Calgary from the city's open data portal, the **Near** tool in ArcGIS is used to perform this calculation for the **`distance to parks`** feature variable. 
@@ -343,10 +346,10 @@ After bringing in the complete parks dataset in Calgary from the city's open dat
 map.distparks <- ggplot() +
   geom_sf(data = calgary_fishnet_final, aes(fill = dist_parks), color=NA) +
   scale_fill_viridis()+
-  labs(title = "Distance to Parks", fill="Distance \n(meters)") + mapTheme()
+  labs(title = "Distance to \nNearest Park", fill="Distance \n(meters)") + mapTheme()
 ```
 
-### Number of Hydrological Intersections
+### Number of Hydrological Feature Intersections
 In addition to mere distance to stream lines, the frequency of intersections with hydrological features could indicate damper soils and areas at greater risk of inundation. To calculate the number of intersections with existing hydrological features per fishnet grid cell, the `lengths(st_intersects)` functionality in R is used to create a count feature variable, **`n_hydro_int`**.
 
 ```{r message=FALSE, warning=FALSE, results='hide'}
@@ -354,14 +357,14 @@ In addition to mere distance to stream lines, the frequency of intersections wit
 map.hydroints <- ggplot() +
   geom_sf(data = calgary_fishnet_final, aes(fill = n_hydro_int), color=NA) +
   scale_fill_viridis()+
-  labs(title = "Hydrology Intersections", fill="Number \n") + mapTheme()
+  labs(title = "Number of \nHydrology Intersections", fill="Number \n") + mapTheme()
 ```
-
+### Maps of All Significant Features included in the Model
 ```{r, message=FALSE, warning=FALSE}
 
 grid.arrange(map.elevation, map.diststreams, map.flowaccmax, map.steepslopedist, map.distparks, map.hydroints,
-             ncol=2,
-             top = "Selected Significant Features included in Model")
+             ncol=3,
+             top = "")
 ```
 
 
@@ -456,11 +459,6 @@ ggplot(calgary_fishnet_variable_nhydroint, aes(as.factor(inundation), value, fil
                     labels = c("Not Inundated","Inundated"),
                     name = "")   + labs(x="Inundation", y="Value") +plotTheme()
 ```
-
-## Other Features Explored
-Slope (maximum)
-
-Impervious surface pixel sums
 
 # Model Development & Testing on Calgary
 Now that the features have been prepared, we can begin to build the predictive model. First, we split up our known data set into a training and a test set. 
@@ -572,15 +570,21 @@ xtab.regCalgary <- caret::confusionMatrix(reference = as.factor(testProbs$obs),
 
 ## Confusion Matrix
 There are four possible scenarios that will result from the use of this model:
+1. Model predicts inundation and there is inundation (True Positive)
+2. Model predicts no inundation and there is no inundation (True Negative)
+3. Model predicts inundation and there is no inundation (False Positive)
+4. Model predicts no inundation and there is inundation (False Negative)
 
-Type of Prediction | Description
-------------- | ------------- 
-True Positive (TP) | Model predicts inundation and there is inundation
-False Positive (FP| Model predicts inundation and there is no inundation
-True Negative (TN) | Model predicts no inundation and there is no inundation
-False Negative (FN) | Model predicts no inundation and there is inundation
+The results of each scenario at the optimal threshold for accuracy (0.38) is displayed in the table below (with the confusion matrix of 0 and 1 directly below the table). These results support our above observation that the model predicts well for areas of no inundation than areas of inundation. 
 
-The frequency of each scenario is displayed in the confusion matrix below. These results support our above observation that the model predicts well for areas of no inundation than areas of inundation.  
+Type of Prediction | Description | Results
+------------- | ------------- | ------------- 
+True Positive (TP) | Model predicts inundation and there is inundation | 425
+True Negative (TN) | Model predicts no inundation and there is no inundation | 4873
+False Positive (FP)| Model predicts inundation and there is no inundation | 167
+False Negative (FN) | Model predicts no inundation and there is inundation |96
+
+ 
 
 
 ```{r message=FALSE, warning=FALSE}
@@ -663,9 +667,10 @@ cvFit_inundationModel
 ```
 
 ### Accuracy and Kappa
-To evaluate the algorithm further, the accuracy an kappa metrics shed light on goodness of fit. **Accuracy* is the percentage of instances classified correctly out of the total. While this does not provide the nuance provided in the confusion matrix (showing the breakdown of accuracy across the four classes), it is useful in defending the model's success at a high level.
+To evaluate the algorithm further, the accuracy an kappa metrics shed light on goodness of fit. **Accuracy** is the percentage of instances classified correctly out of the total. While this does not provide the nuance provided in the confusion matrix (showing the breakdown of accuracy across the four classes), it is useful in defending the model's success at a high level.
 
-**Kappa** (also known as Cohen's Kappa) is normalized accuracy. This is useful here because we have an imbalance in the 0s and 1s for no inundation and inundation, respectively. While the imbalance is expected given that the previous flood extent showed that the majority of Calgary was not inundated, Kappa is useful in its comparison of observed accuracy to expected accuracy, taking into account random chance.
+**Kappa** (also known as Cohen's Kappa) is normalized accuracy. This is useful here because we have an imbalance in the 0s and 1s for no inundation and inundation, respectively. While the imbalance is expected given that the previous flood extent showed that the majority of Calgary was not inundated, Kappa is useful in its comparison of observed accuracy to expected accuracy, taking into account random chance. It is still a relatively high value with a mean of over 68%. According to best practices in statistics, a kappa value of 0.68 falls within the range of “substantial agreement.”
+
 
 ```{r eval=FALSE, include=FALSE}
 ggplot(as.data.frame(cvFit_inundationModel$resample), aes(Accuracy)) + 
@@ -708,7 +713,7 @@ ggplot() +
   labs(title="Predictions for Inundation in Calgary")
 ```
 
-This second map shows the predicted probabilities, but with the 2013 flood extent overlay. This helps to compare the predicted inundation outcomes (towards the green and yellow part of the gradient) with the actual data used to train the model in the first place.
+This second map shows the predicted probabilities, but with the 2013 flood extent overlay. This helps to compare the predicted inundation outcomes with the actual data used to train the model in the first place.
 
 ```{r message=FALSE, warning=FALSE}
 ggplot() + 
@@ -722,6 +727,7 @@ ggplot() +
 ```
 
 # Turning to Denver: How Does This Model Perform in Another City?
+Now that we have confirmed the model’s high quality performance in Calgary, let’s see if is generalizable to other cities. Denver, Colorado has a similar topography, infrastructure, and population size to Calgary. We perform the same feature engineering for the selected features of the model and run the regression for the City of Denver. 
 
 ```{r Denver feature loading and engineering, message=FALSE, warning=FALSE, results='hide'}
 den_boundary <- st_read("Data_Denver/county_boundary/county_boundary.shp") # need full shp package
@@ -823,5 +829,6 @@ ggplot() +
   labs(title="Predictions for Inundation in Denver")
 
 ```
-
+# Conclusion
+The results of this model are crucial to informing planners and allowing a city to be prepared for flood disasters. Successfully leveraging the knowledge and insight gained can save lives, cities, homes, and money. There are many implementation challenges when it comes to appropriately executing emergency preparedness programs such as funding, political and community support, and collaboration across departments. However, we are confident that the story being told through these data visualizations can be an effective tool in convincing relevant decision-makers.
 
