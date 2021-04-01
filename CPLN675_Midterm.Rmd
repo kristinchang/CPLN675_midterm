@@ -728,7 +728,7 @@ ggplot() +
 ```
 
 # Turning to Denver: How Does This Model Perform in Another City?
-Now that we have confirmed the model’s high quality performance in Calgary, let’s see if is generalizable to other cities. Denver, Colorado has a similar topography, infrastructure, and population size to Calgary. We perform the same feature engineering for the selected features of the model and run the regression for the City of Denver. 
+Now that we have confirmed the model’s high quality performance in Calgary, we see if it is generalizable to other cities. Denver, Colorado has a similar topography, infrastructure, and population composition to Calgary. We perform the same feature engineering for the selected features of the model and run the regression at the 0.38 threshold for Denver. A map of our probability predictions is displayed below.
 
 ```{r Denver feature loading and engineering, message=FALSE, warning=FALSE, results='hide'}
 den_boundary <- st_read("Data_Denver/county_boundary/county_boundary.shp") # need full shp package
@@ -809,12 +809,12 @@ den_selectCentroids <-
   left_join(dplyr::select(den_fishnet_new, ID_FISHNET)) %>%
   st_sf()
 
-den_fishnet_final <- den_selectCentroids
+den_fishnet_final <- den_selectCentroids %>% na.
 ```
 
 ```{r Denver predict, message=FALSE, warning=FALSE, results='hide'}
 allPredictions_den <- 
-  predict(inundationModel, den_fishnet_final, type="response")
+  predict(cvFit_inundationModel, den_fishnet_final, type="prob")[,2]
 
 
 den_fishnet_final_preds <- den_fishnet_final %>%
@@ -832,7 +832,9 @@ ggplot() +
 ```
 
 # Conclusion
-The results of this model are crucial to informing planners and allowing a city to be prepared for flood disasters. Successfully leveraging the knowledge and insight gained can save lives, cities, homes, and money. There are many implementation challenges when it comes to appropriately executing emergency preparedness programs such as funding, political and community support, and collaboration across departments. However, we are confident that the story being told through these data visualizations can be an effective tool in convincing relevant decision-makers.
+The results of this model are crucial to informing planners and allowing a city to be prepared for flood disasters. Successfully leveraging the knowledge and insight gained can save lives, cities, homes, and money. There are many implementation challenges when it comes to appropriately executing emergency preparedness programs such as funding, political and community support, and collaboration across departments. However, we are optimistic that the story being told through these data visualizations can be an effective tool in convincing relevant decision-makers.
+
+This model as we have shown is strong, but not perfect. Given support and interest from other cities, we could further refine its accuracy and generalizability by conducting more evaluation on the Denver results, testing the model at different accuracy thresholds for Denver, and exploring more engineered features for both contexts.
 
 
 
